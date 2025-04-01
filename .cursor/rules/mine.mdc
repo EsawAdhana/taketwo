@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Assume that I'm always running 'npm run dev' on my own terminal, so there is no need for you to run it too. I will pass in any errors/messages manually.

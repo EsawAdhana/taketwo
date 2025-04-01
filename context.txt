@@ -1,0 +1,4 @@
+This is a website which looks to help summer (tech) interns find roommates in common intern locations
+(Bay area, Seattle area, etc). TakeTwo does this by first prompting first-time users to fill out a
+survey with their preferences/details and then showing users people who match them in a grid-style,
+and also by offering an in-house direct messaging mechanism to allow users to coordinate plans.
