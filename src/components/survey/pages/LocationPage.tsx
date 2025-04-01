@@ -11,7 +11,7 @@ interface LocationPageProps {
 export default function LocationPage({ formData, setFormData }: LocationPageProps) {
   const [customCity, setCustomCity] = useState('');
   const [showCustomCityInput, setShowCustomCityInput] = useState(false);
-  const availableCities = formData.housingRegion ? HOUSING_REGIONS[formData.housingRegion as keyof typeof HOUSING_REGIONS] || [] : [];
+  const availableCities: string[] = formData.housingRegion ? [...(HOUSING_REGIONS[formData.housingRegion as keyof typeof HOUSING_REGIONS] || [])] : [];
   
   const handleRegionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
