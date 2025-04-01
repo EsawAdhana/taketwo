@@ -77,7 +77,7 @@ export default function TimingBudgetPage({ formData, setFormData }: TimingBudget
         {/* Monthly Budget */}
         <div>
           <label className="block mb-2 font-medium text-gray-900 dark:text-gray-100" htmlFor="monthlyBudget">
-            What is your monthly budget? ($ per month) *
+            How much can you personally contribute monthly? ($ per month) *
           </label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
@@ -93,7 +93,7 @@ export default function TimingBudgetPage({ formData, setFormData }: TimingBudget
               required
             />
           </div>
-          <p className="mt-1 text-sm text-gray-500">Enter your maximum monthly budget for housing</p>
+          <p className="mt-1 text-sm text-gray-500">Enter the maximum amount you can contribute each month for your share of the housing costs</p>
         </div>
       </div>
       

@@ -55,7 +55,7 @@ export default function LocationPage({ formData, setFormData }: LocationPageProp
       {/* Housing Region */}
       <div>
         <label className="block mb-2 font-medium text-gray-900 dark:text-gray-100" htmlFor="housingRegion">
-          Where are you looking to dorm? *
+          Where are you looking to live? *
         </label>
         <select
           id="housingRegion"

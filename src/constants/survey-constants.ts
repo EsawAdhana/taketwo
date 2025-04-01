@@ -9,17 +9,22 @@ export type HousingRegion = keyof typeof HOUSING_REGIONS;
 export type CityType = typeof HOUSING_REGIONS[HousingRegion][number];
 
 export const NON_NEGOTIABLES = [
-  "No smoking",
-  "No pets",
-  "No alcohol",
-  "No parties",
-  "Clean common areas",
-  "Quiet hours",
-  "Early riser",
-  "Night owl"
+  "Okay with pets",
+  "Okay with alcohol",
+  "Okay with parties",
+  "Okay with visitors",
+  "Okay with visitors staying overnight",
+  "LGBTQ+/Ally",
 ] as const;
 
 export type NonNegotiable = typeof NON_NEGOTIABLES[number];
+
+export type PreferenceStrength = "deal breaker" | "prefer not" | "neutral" | "prefer" | "must have";
+
+export interface Preference {
+  item: NonNegotiable;
+  strength: PreferenceStrength;
+}
 
 export interface SurveyFormData {
   // Page 1: Basic Info
@@ -37,7 +42,7 @@ export interface SurveyFormData {
   monthlyBudget: number;
   
   // Page 4: Preferences
-  nonNegotiables: NonNegotiable[];
+  preferences: Preference[];
   additionalNotes: string;
   
   // Form state
@@ -55,7 +60,7 @@ export const INITIAL_FORM_DATA: SurveyFormData = {
   internshipEndDate: "",
   desiredRoommates: "1",
   monthlyBudget: 1500,
-  nonNegotiables: [],
+  preferences: [],
   additionalNotes: "",
   currentPage: 1,
   isDraft: false,

@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'TakeTwo',
-  description: 'A Next.js application with Google OAuth',
+  description: 'Because everyone deserves a second chance',
 };
 
 export default async function RootLayout({
