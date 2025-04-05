@@ -11,7 +11,7 @@ export async function middleware(request: NextRequest) {
   }
   
   // Paths that don't require survey completion
-  const publicPaths = ['/survey', '/api/survey'];
+  const publicPaths = ['/survey', '/api/survey', '/testing', '/api/testing'];
   if (publicPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
     return NextResponse.next();
   }

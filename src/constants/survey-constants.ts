@@ -49,6 +49,9 @@ export interface SurveyFormData {
   currentPage: number;
   isDraft: boolean;
   isSubmitted: boolean;
+  
+  // User identification
+  userEmail?: string;
 }
 
 export const INITIAL_FORM_DATA: SurveyFormData = {

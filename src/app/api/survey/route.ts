@@ -13,9 +13,17 @@ export async function GET() {
     const client = await clientPromise;
     const db = client.db('taketwo');
     
-    const survey = await db.collection('surveys').findOne({
+    // Check regular surveys collection first
+    let survey = await db.collection('surveys').findOne({
       userEmail: session.user.email
     });
+    
+    // If not found, check test surveys
+    if (!survey) {
+      survey = await db.collection('test_surveys').findOne({
+        userEmail: session.user.email
+      });
+    }
     
     return NextResponse.json({ data: survey });
   } catch (error) {
