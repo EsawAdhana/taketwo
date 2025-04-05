@@ -60,7 +60,10 @@ export const INITIAL_FORM_DATA: SurveyFormData = {
   internshipEndDate: "",
   desiredRoommates: "1",
   monthlyBudget: 1500,
-  preferences: [],
+  preferences: NON_NEGOTIABLES.map(item => ({
+    item,
+    strength: "neutral" as PreferenceStrength
+  })),
   additionalNotes: "",
   currentPage: 1,
   isDraft: false,

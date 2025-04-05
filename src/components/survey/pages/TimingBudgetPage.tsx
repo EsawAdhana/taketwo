@@ -1,6 +1,7 @@
 'use client';
 
 import { SurveyFormData } from '@/constants/survey-constants';
+import { useState } from 'react';
 
 interface TimingBudgetPageProps {
   formData: SurveyFormData;
@@ -8,8 +9,22 @@ interface TimingBudgetPageProps {
 }
 
 export default function TimingBudgetPage({ formData, setFormData }: TimingBudgetPageProps) {
+  const [dateError, setDateError] = useState<string>('');
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    
+    if (name === 'internshipStartDate' || name === 'internshipEndDate') {
+      const startDate = name === 'internshipStartDate' ? value : formData.internshipStartDate;
+      const endDate = name === 'internshipEndDate' ? value : formData.internshipEndDate;
+      
+      if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
+        setDateError('End date cannot be before start date');
+        return;
+      }
+      setDateError('');
+    }
+    
     setFormData(prev => ({ ...prev, [name]: value }));
   };
   
@@ -44,11 +59,15 @@ export default function TimingBudgetPage({ formData, setFormData }: TimingBudget
             type="date"
             id="internshipEndDate"
             name="internshipEndDate"
-            className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className={`w-full rounded-md border ${dateError ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} bg-white dark:bg-gray-700 p-2 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
             value={formData.internshipEndDate}
             onChange={handleInputChange}
+            min={formData.internshipStartDate}
             required
           />
+          {dateError && (
+            <p className="mt-1 text-sm text-red-500">{dateError}</p>
+          )}
         </div>
       </div>
       

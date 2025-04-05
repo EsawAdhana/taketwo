@@ -1,14 +1,14 @@
-import type { Metadata } from 'next';
+import '@/app/globals.css';
 import { Inter } from 'next/font/google';
-import '../styles/globals.css';
 import { getServerSession } from 'next-auth';
 import SessionProvider from '@/components/SessionProvider';
+import SettingsButton from '@/components/SettingsButton';
 
 const inter = Inter({ subsets: ['latin'] });
 
-export const metadata: Metadata = {
+export const metadata = {
   title: 'TakeTwo',
-  description: 'Because everyone deserves a second chance',
+  description: 'Find your perfect roommate match for your internship',
 };
 
 export default async function RootLayout({
@@ -22,7 +22,14 @@ export default async function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <SessionProvider session={session}>
-          {children}
+          <div className="relative min-h-screen">
+            {session && (
+              <div className="absolute top-4 right-4 z-50">
+                <SettingsButton />
+              </div>
+            )}
+            {children}
+          </div>
         </SessionProvider>
       </body>
     </html>

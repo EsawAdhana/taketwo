@@ -13,6 +13,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@prisma/client": "^6.5.0",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
@@ -20,6 +21,7 @@
     "mongoose": "latest",
     "next": "13.4.19",
     "next-auth": "latest",
+    "prisma": "^6.5.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "typescript": "latest"

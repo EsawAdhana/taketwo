@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { HOUSING_REGIONS, NON_NEGOTIABLES, SurveyFormData, INITIAL_FORM_DATA } from '@/constants/survey-constants';
+import { HOUSING_REGIONS, NON_NEGOTIABLES, SurveyFormData, INITIAL_FORM_DATA, Preference } from '@/constants/survey-constants';
 import { useRouter } from 'next/navigation';
 
 // Page components
@@ -23,6 +23,14 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
   const [formData, setFormData] = useState<SurveyFormData>(INITIAL_FORM_DATA);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  
+  // Save survey whenever currentPage changes
+  useEffect(() => {
+    if (!loading && formData.currentPage) {
+      saveSurvey(false);
+    }
+  }, [formData.currentPage, loading]);
   
   // Fetch existing survey data
   useEffect(() => {
@@ -34,10 +42,22 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
         const result = await response.json();
         
         if (response.ok && result.data) {
+          // Create a map of existing preferences for easy lookup
+          const existingPreferences = new Map(
+            result.data.preferences?.map((p: Preference) => [p.item, p]) || []
+          );
+          
+          // Merge with initial preferences, keeping existing ones and using neutral for missing ones
+          const mergedPreferences = INITIAL_FORM_DATA.preferences.map(initialPref => 
+            existingPreferences.get(initialPref.item) || initialPref
+          );
+          
           setFormData({
             ...INITIAL_FORM_DATA,
             ...result.data,
-            currentPage: isEditing ? result.data.currentPage || 1 : 1,
+            preferences: mergedPreferences,
+            // Keep the saved page unless the survey was submitted
+            currentPage: result.data.isSubmitted ? 1 : (result.data.currentPage || 1),
             isSubmitted: isEditing ? result.data.isSubmitted : false
           });
         }
@@ -56,6 +76,7 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
     setSaving(true);
     
     try {
+      // Send the full formData including currentPage
       const response = await fetch('/api/survey', {
         method: 'POST',
         headers: {
@@ -73,10 +94,6 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
       if (response.ok) {
         if (isSubmitted) {
           setFormData(prev => ({ ...prev, isSubmitted: true }));
-          if (onSubmitSuccess) {
-            onSubmitSuccess();
-          }
-          router.push('/dashboard');
         }
         return true;
       } else {
@@ -113,13 +130,10 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
   const handleNext = async () => {
     if (!canProceed()) return;
     
-    const success = await saveSurvey(false);
-    if (success) {
-      setFormData(prev => ({ 
-        ...prev, 
-        currentPage: Math.min(prev.currentPage + 1, 4)
-      }));
-    }
+    setFormData(prev => ({ 
+      ...prev, 
+      currentPage: Math.min(prev.currentPage + 1, 4)
+    }));
   };
   
   const handleBack = () => {
@@ -130,7 +144,18 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
   };
   
   const handleSubmit = async () => {
-    await saveSurvey(true);
+    const success = await saveSurvey(true);
+    if (success) {
+      setShowCompletionModal(true);
+    }
+  };
+  
+  const handleGoToDashboard = () => {
+    setShowCompletionModal(false);
+    if (onSubmitSuccess) {
+      onSubmitSuccess();
+    }
+    router.push('/dashboard');
   };
   
   if (loading) {
@@ -139,6 +164,26 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
   
   return (
     <div className="max-w-3xl mx-auto">
+      {/* Completion Modal */}
+      {showCompletionModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full mx-4 text-center">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+              Survey Completed!
+            </h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              Thank you for completing the survey. You can always update your preferences later in settings.
+            </p>
+            <button
+              onClick={handleGoToDashboard}
+              className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Go to Dashboard
+            </button>
+          </div>
+        </div>
+      )}
+      
       {/* Progress Bar */}
       <div className="mb-8">
         <div className="flex justify-between mb-2">
