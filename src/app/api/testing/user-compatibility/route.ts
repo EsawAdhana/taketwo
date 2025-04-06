@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import clientPromise from '@/lib/mongodb';
-import { calculateCompatibilityScore } from '@/utils/recommendationEngine';
+import { calculateCompatibilityScore, calculateEnhancedCompatibilityScore } from '@/utils/recommendationEngine';
 import { WithId, Document } from 'mongodb';
 import { SurveyFormData } from '@/constants/survey-constants';
 
@@ -9,8 +9,13 @@ import { SurveyFormData } from '@/constants/survey-constants';
 // Should be disabled in production
 const ENABLE_TEST_ENDPOINT = process.env.NODE_ENV !== 'production';
 
+// Extended version with name field
+interface ExtendedSurveyData extends SurveyFormData {
+  name?: string;
+}
+
 // Convert MongoDB document to SurveyFormData
-function documentToSurveyData(doc: WithId<Document>): SurveyFormData {
+function documentToSurveyData(doc: any): ExtendedSurveyData {
   return {
     gender: doc.gender || '',
     roomWithDifferentGender: !!doc.roomWithDifferentGender,
@@ -19,16 +24,17 @@ function documentToSurveyData(doc: WithId<Document>): SurveyFormData {
     internshipStartDate: doc.internshipStartDate || '',
     internshipEndDate: doc.internshipEndDate || '',
     desiredRoommates: doc.desiredRoommates || '1',
-    monthlyBudget: typeof doc.monthlyBudget === 'number' ? doc.monthlyBudget : 1500,
+    minBudget: typeof doc.minBudget === 'number' ? doc.minBudget : 1000,
+    maxBudget: typeof doc.maxBudget === 'number' ? doc.maxBudget : 1500,
     preferences: Array.isArray(doc.preferences) ? doc.preferences : [],
     additionalNotes: doc.additionalNotes || '',
     currentPage: typeof doc.currentPage === 'number' ? doc.currentPage : 1,
     isDraft: !!doc.isDraft,
     isSubmitted: !!doc.isSubmitted,
-    userEmail: doc.userEmail || '',
+    userEmail: doc.userEmail || doc.email || '',
     name: doc.name || '',
     email: doc.email || '',
-  } as SurveyFormData;
+  } as ExtendedSurveyData;
 }
 
 export async function GET(req: NextRequest) {
@@ -51,20 +57,27 @@ export async function GET(req: NextRequest) {
       );
     }
     
-    // Get query parameters
-    const url = new URL(req.url);
-    const userEmail = url.searchParams.get('userEmail');
-    const minScore = url.searchParams.get('minScore');
+    // Get parameters
+    const { searchParams } = new URL(req.url);
+    const centralUserEmail = searchParams.get('user');
+    const minScore = searchParams.get('minScore');
+    const useEnhancedScoring = searchParams.get('enhanced') !== 'false'; // Default to true
     
-    if (!userEmail) {
+    if (!centralUserEmail) {
       return NextResponse.json(
-        { error: 'Missing required parameter: userEmail' },
+        { error: 'Missing central user email parameter' },
         { status: 400 }
       );
     }
     
-    // Convert minScore to number if provided, default to 0
-    const minScoreValue = minScore ? parseFloat(minScore) : 0;
+    // Parse minimum score, defaulting to 50
+    const minScoreValue = minScore ? parseInt(minScore, 10) : 50;
+    if (isNaN(minScoreValue)) {
+      return NextResponse.json(
+        { error: 'Invalid minScore parameter, must be a number' },
+        { status: 400 }
+      );
+    }
     
     const client = await clientPromise;
     const db = client.db('taketwo');
@@ -78,12 +91,17 @@ export async function GET(req: NextRequest) {
       );
     }
     
-    // Get central user survey data
-    const userDoc = await db.collection('test_surveys').findOne({ userEmail });
+    // Find the central user
+    const userDoc = await db.collection('test_surveys').findOne({ 
+      $or: [
+        { userEmail: centralUserEmail },
+        { email: centralUserEmail }
+      ] 
+    });
     
     if (!userDoc) {
       return NextResponse.json(
-        { error: 'User not found' },
+        { error: 'Central user not found' },
         { status: 404 }
       );
     }
@@ -91,34 +109,62 @@ export async function GET(req: NextRequest) {
     // Convert to SurveyFormData
     const userData = documentToSurveyData(userDoc);
     
-    // Get all other test users
-    const otherUserDocs = await db.collection('test_surveys').find({ 
-      userEmail: { $ne: userEmail },
-      isSubmitted: true 
+    // Get all other users
+    const otherUserDocs = await db.collection('test_surveys').find({
+      $and: [
+        { 
+          $or: [
+            { userEmail: { $ne: centralUserEmail } },
+            { email: { $ne: centralUserEmail } }
+          ]
+        },
+        { isSubmitted: true }
+      ]
     }).toArray();
     
     // Calculate compatibility with each other user
-    const compatibilityResults = otherUserDocs.map(otherUserDoc => {
-      const otherUserData = documentToSurveyData(otherUserDoc);
-      const score = calculateCompatibilityScore(userData, otherUserData);
+    const compatibilityResults = [];
+    
+    // Process each potential match
+    for (const otherUserDoc of otherUserDocs) {
+      const otherUser = documentToSurveyData(otherUserDoc);
       
-      if (!score) {
-        return null; // Incompatible due to hard constraints
+      let score;
+      if (useEnhancedScoring) {
+        // Pass the minimum score threshold to the enhanced scoring function
+        score = await calculateEnhancedCompatibilityScore(userData, otherUser, minScoreValue);
+      } else {
+        score = calculateCompatibilityScore(userData, otherUser);
+        // Filter by threshold for basic scoring
+        if (score && score.score < minScoreValue) {
+          score = null;
+        }
       }
       
-      return {
-        user: {
-          email: otherUserData.userEmail,
-          name: otherUserData.name || otherUserData.userEmail,
-          surveyData: otherUserData
-        },
-        score: score.score,
-        details: score.compatibilityDetails
-      };
-    })
-    .filter(result => result !== null && result.score >= minScoreValue)
-    .sort((a, b) => b!.score - a!.score);
+      // Only include matches that meet the threshold (after potential adjustment)
+      if (score !== null) {
+        compatibilityResults.push({
+          user: {
+            email: otherUser.userEmail!,
+            name: otherUserDoc.name || otherUser.userEmail!,
+            surveyData: otherUser
+          },
+          score: score.score,
+          details: score.compatibilityDetails,
+          explanation: score.explanations?.additionalNotesExplanation || 'No explanation available'
+        });
+      }
+    }
     
+    // Sort by score (highest first)
+    compatibilityResults.sort((a, b) => b.score - a.score);
+    
+    // Map to include the full user data for the client
+    const userDataMap = new Map();
+    for (const result of compatibilityResults) {
+      userDataMap.set(result.user.email, result.user);
+    }
+
     return NextResponse.json({
       centralUser: {
         email: userData.userEmail,
@@ -127,13 +173,18 @@ export async function GET(req: NextRequest) {
       },
       compatibleUsers: compatibilityResults,
       totalUsersChecked: otherUserDocs.length,
-      compatibleUsersCount: compatibilityResults.length
+      compatibleUsersCount: compatibilityResults.length,
+      enhancedScoring: useEnhancedScoring,
+      explanation: 'This is the explanation for the user compatibility calculation'
     });
     
   } catch (error) {
     console.error('Error calculating user compatibility:', error);
     return NextResponse.json(
-      { error: 'Failed to calculate user compatibility' },
+      { 
+        error: 'Failed to calculate user compatibility',
+        details: error instanceof Error ? error.message : String(error)
+      },
       { status: 500 }
     );
   }

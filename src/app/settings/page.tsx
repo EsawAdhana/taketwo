@@ -102,7 +102,7 @@ export default function SettingsPage() {
               <h3 className="font-medium text-gray-700 mb-2">Roommate Preferences</h3>
               <p className="text-gray-600">
                 Looking for: {surveyData?.desiredRoommates} roommate(s)<br />
-                Budget: ${surveyData?.monthlyBudget} per month
+                Budget: ${surveyData?.minBudget} - ${surveyData?.maxBudget} per month
               </p>
             </div>
             

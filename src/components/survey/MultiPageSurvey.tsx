@@ -119,7 +119,8 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
         return !!formData.internshipStartDate && 
                !!formData.internshipEndDate && 
                !!formData.desiredRoommates && 
-               formData.monthlyBudget > 0;
+               formData.minBudget > 0 &&
+               formData.maxBudget >= formData.minBudget;
       case 4:
         return true;
       default:

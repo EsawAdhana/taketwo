@@ -3,4 +3,4 @@ description:
 globs: 
 alwaysApply: true
 ---
-Assume that I'm always running 'npm run dev' on my own terminal, so there is no need for you to run it too. I will pass in any errors/messages manually.
+Assume that I'm always running 'npm run dev' on my own terminal, so there is no need for you to run it too. I will pass in any errors/messages manually. Also, do what I say, or ask for clarity if doing something different, especially placeholder content. I dislike when generated code uses placeholder content for the time being, as it makes it challenging to debug/track sometimes.

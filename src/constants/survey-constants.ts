@@ -39,7 +39,8 @@ export interface SurveyFormData {
   internshipStartDate: string;
   internshipEndDate: string;
   desiredRoommates: string;
-  monthlyBudget: number;
+  minBudget: number;
+  maxBudget: number;
   
   // Page 4: Preferences
   preferences: Preference[];
@@ -62,7 +63,8 @@ export const INITIAL_FORM_DATA: SurveyFormData = {
   internshipStartDate: "",
   internshipEndDate: "",
   desiredRoommates: "1",
-  monthlyBudget: 1500,
+  minBudget: 1000,
+  maxBudget: 1500,
   preferences: NON_NEGOTIABLES.map(item => ({
     item,
     strength: "neutral" as PreferenceStrength

@@ -16,6 +16,7 @@ interface TestResult {
   details: {
     [key: string]: number;
   };
+  explanation?: string;
 }
 
 interface DebugInfo {
@@ -60,6 +61,24 @@ export default function TestingPage() {
   const [loadingCompatibility, setLoadingCompatibility] = useState(false);
   const [selectedUserDetails, setSelectedUserDetails] = useState<any>(null);
   const [loadingUserDetails, setLoadingUserDetails] = useState(false);
+  
+  // New states for custom user creation
+  const [showCustomUserForm, setShowCustomUserForm] = useState(false);
+  const [addingCustomUser, setAddingCustomUser] = useState(false);
+  const [customUserData, setCustomUserData] = useState({
+    name: '',
+    email: '',
+    gender: 'Male',
+    roomWithDifferentGender: false,
+    housingRegion: 'Bay Area',
+    housingCities: ['San Francisco'],
+    internshipStartDate: '',
+    internshipEndDate: '',
+    desiredRoommates: '2',
+    minBudget: 1500,
+    maxBudget: 2500,
+    additionalNotes: ''
+  });
   
   useEffect(() => {
     // Only redirect if not authenticated (don't check for survey completion)
@@ -307,7 +326,7 @@ export default function TestingPage() {
           const user1 = usersToTest[i];
           const user2 = usersToTest[j];
           
-          const response = await fetch(`/api/testing/calculate-score?user1=${user1.email}&user2=${user2.email}`);
+          const response = await fetch(`/api/testing/calculate-score?email1=${encodeURIComponent(user1.email)}&email2=${encodeURIComponent(user2.email)}`);
           
           if (response.ok) {
             const data = await response.json();
@@ -316,7 +335,8 @@ export default function TestingPage() {
                 user1: user1.name,
                 user2: user2.name,
                 score: data.score,
-                details: data.details
+                details: data.details,
+                explanation: data.explanation
               });
             }
           }
@@ -441,7 +461,7 @@ export default function TestingPage() {
       setError(null);
       setSuccess(null);
       
-      const response = await fetch(`/api/testing/user-compatibility?userEmail=${encodeURIComponent(centralUser)}&minScore=${minCompatibilityScore}`);
+      const response = await fetch(`/api/testing/user-compatibility?user=${encodeURIComponent(centralUser)}&minScore=${minCompatibilityScore}`);
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -543,6 +563,100 @@ export default function TestingPage() {
     return preferences.map(pref => 
       `${pref.item}: ${pref.strength}`
     ).join(', ');
+  };
+  
+  // Add a new function for handling custom user form changes
+  const handleCustomUserInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    
+    if (type === 'checkbox') {
+      const checked = (e.target as HTMLInputElement).checked;
+      setCustomUserData(prev => ({ ...prev, [name]: checked }));
+    } else if (name === 'housingCities') {
+      // Handle multi-select for cities
+      const options = (e.target as HTMLSelectElement).options;
+      const selectedCities: string[] = [];
+      for (let i = 0; i < options.length; i++) {
+        if (options[i].selected) {
+          selectedCities.push(options[i].value);
+        }
+      }
+      setCustomUserData(prev => ({ ...prev, [name]: selectedCities }));
+    } else {
+      setCustomUserData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+  
+  // Function to handle custom user submission
+  const addCustomUser = async () => {
+    if (!customUserData.name || !customUserData.email) {
+      setError('Name and email are required for custom test users');
+      return;
+    }
+    
+    try {
+      setAddingCustomUser(true);
+      setError(null);
+      setSuccess(null);
+      
+      // Set default dates if not provided
+      const userData = { ...customUserData };
+      if (!userData.internshipStartDate) {
+        userData.internshipStartDate = new Date().toISOString().split('T')[0];
+      }
+      if (!userData.internshipEndDate) {
+        const endDate = new Date();
+        endDate.setMonth(endDate.getMonth() + 3);
+        userData.internshipEndDate = endDate.toISOString().split('T')[0];
+      }
+      
+      const response = await fetch('/api/testing/add-custom-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to add custom test user: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setSuccess(data.message || 'Custom test user added successfully');
+        
+        // Reset the form
+        setCustomUserData({
+          name: '',
+          email: '',
+          gender: 'Male',
+          roomWithDifferentGender: false,
+          housingRegion: 'Bay Area',
+          housingCities: ['San Francisco'],
+          internshipStartDate: '',
+          internshipEndDate: '',
+          desiredRoommates: '2',
+          minBudget: 1500,
+          maxBudget: 2500,
+          additionalNotes: ''
+        });
+        
+        // Refresh the test users list
+        fetchDebugInfo();
+        fetchTestUsers();
+        setShowCustomUserForm(false);
+      } else {
+        setError(`Error adding custom test user: ${data.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error adding custom test user:', error);
+      setError(`Error adding custom test user: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setAddingCustomUser(false);
+    }
   };
   
   if (status === 'loading' || loading) {
@@ -652,225 +766,400 @@ export default function TestingPage() {
       {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
       {success && <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">{success}</div>}
       
-      {/* Database Connection Status */}
-      <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-        <h2 className="text-xl font-semibold mb-2">Database Status</h2>
+      {/* User Management Section */}
+      <div className="bg-white shadow-md rounded-lg p-6 mb-8">
+        <h2 className="text-2xl font-bold mb-4 text-gray-800">Test User Management</h2>
         
-        {debugInfo ? (
-          <div>
-            <p><strong>Total Surveys:</strong> {debugInfo.surveyCount}</p>
-            <p><strong>Connection Status:</strong> {debugInfo.dbStatus?.connected ? '✅ Connected' : '❌ Disconnected'}</p>
-            <p><strong>Database:</strong> {debugInfo.dbStatus?.dbName}</p>
-            <p><strong>Collections:</strong> {debugInfo.collections?.join(', ')}</p>
-          </div>
-        ) : (
-          <p>{loadingDebug ? 'Loading database status...' : 'Database status not available'}</p>
-        )}
-        
-        <button 
-          className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 mr-2"
-          onClick={fetchDebugInfo}
-          disabled={loadingDebug}
-        >
-          {loadingDebug ? 'Loading...' : 'Refresh Status'}
-        </button>
-      </div>
-      
-      {/* Test User Management */}
-      <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-        <h2 className="text-xl font-semibold mb-2">Test User Management</h2>
-        
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-1">Number of Test Users to Add:</label>
-          <div className="flex items-center">
-            <input 
-              type="number" 
-              value={numUsersToAdd} 
-              onChange={(e) => setNumUsersToAdd(Math.max(1, Math.min(100, parseInt(e.target.value) || 10)))} 
-              className="border p-2 rounded mr-2"
+        {/* Test user generation controls */}
+        <div className="flex flex-col md:flex-row gap-4 mb-6">
+          <div className="flex flex-col gap-2">
+            <label htmlFor="numUsers" className="text-sm font-medium text-gray-700">
+              Number of random test users to add:
+            </label>
+            <input
+              type="number"
+              id="numUsers"
               min="1"
               max="100"
+              value={numUsersToAdd}
+              onChange={(e) => setNumUsersToAdd(parseInt(e.target.value) || 10)}
+              className="border border-gray-300 rounded p-2 w-full"
             />
+          </div>
+          
+          <div className="flex items-end">
             <button
-              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 mr-2"
               onClick={addTestUsers}
               disabled={addingUsers}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded disabled:bg-blue-400"
             >
               {addingUsers ? 'Adding...' : 'Add Random Test Users'}
             </button>
           </div>
-          <p className="text-sm text-gray-500 mt-1">Generates random users with varied characteristics</p>
+          
+          <div className="flex items-end">
+            <button
+              onClick={() => setShowCustomUserForm(!showCustomUserForm)}
+              className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded"
+            >
+              {showCustomUserForm ? 'Hide Custom Form' : 'Add Custom Test User'}
+            </button>
+          </div>
+          
+          <div className="flex items-end ml-auto">
+            <button
+              onClick={deleteTestUsers}
+              disabled={deletingUsers}
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded disabled:bg-red-400"
+            >
+              {deletingUsers ? 'Deleting...' : 'Delete All Test Users'}
+            </button>
+          </div>
         </div>
         
-        <button
-          className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-          onClick={deleteTestUsers}
-          disabled={deletingUsers}
-        >
-          {deletingUsers ? 'Deleting...' : 'Delete All Test Users'}
-        </button>
-      </div>
-      
-      {/* Test Users List */}
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-2">Test Users</h2>
-        
-        {loading ? (
-          <p>Loading test users...</p>
-        ) : (
-          <>
+        {/* Custom user form - remove dark mode styles */}
+        {showCustomUserForm && (
+          <div className="bg-gray-100 p-4 rounded-lg mb-6">
+            <h3 className="text-lg font-semibold mb-3 text-gray-800">Add Custom Test User</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              {/* Basic info fields */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Name*
+                </label>
+                <input
+                  type="text"
+                  name="name"
+                  value={customUserData.name}
+                  onChange={handleCustomUserInputChange}
+                  className="border border-gray-300 rounded p-2 w-full"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email*
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  value={customUserData.email}
+                  onChange={handleCustomUserInputChange}
+                  className="border border-gray-300 rounded p-2 w-full"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Gender
+                </label>
+                <select
+                  name="gender"
+                  value={customUserData.gender}
+                  onChange={handleCustomUserInputChange}
+                  className="border border-gray-300 rounded p-2 w-full"
+                >
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Non-binary">Non-binary</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="roomWithDifferentGender"
+                  name="roomWithDifferentGender"
+                  checked={customUserData.roomWithDifferentGender}
+                  onChange={handleCustomUserInputChange}
+                  className="h-4 w-4 mr-2"
+                />
+                <label htmlFor="roomWithDifferentGender" className="text-sm font-medium text-gray-700">
+                  Willing to room with different gender
+                </label>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Housing Region
+                </label>
+                <select
+                  name="housingRegion"
+                  value={customUserData.housingRegion}
+                  onChange={handleCustomUserInputChange}
+                  className="border border-gray-300 rounded p-2 w-full"
+                >
+                  <option value="Bay Area">Bay Area</option>
+                  <option value="Seattle Area">Seattle Area</option>
+                  <option value="New York Area">New York Area</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Desired Roommates
+                </label>
+                <select
+                  name="desiredRoommates"
+                  value={customUserData.desiredRoommates}
+                  onChange={handleCustomUserInputChange}
+                  className="border border-gray-300 rounded p-2 w-full"
+                >
+                  <option value="1">1 roommate</option>
+                  <option value="2">2 roommates</option>
+                  <option value="3">3 roommates</option>
+                  <option value="4+">4+ roommates</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Internship Start Date
+                </label>
+                <input
+                  type="date"
+                  name="internshipStartDate"
+                  value={customUserData.internshipStartDate}
+                  onChange={handleCustomUserInputChange}
+                  className="border border-gray-300 rounded p-2 w-full"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Internship End Date
+                </label>
+                <input
+                  type="date"
+                  name="internshipEndDate"
+                  value={customUserData.internshipEndDate}
+                  onChange={handleCustomUserInputChange}
+                  className="border border-gray-300 rounded p-2 w-full"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Min Budget ($)
+                </label>
+                <input
+                  type="number"
+                  name="minBudget"
+                  value={customUserData.minBudget}
+                  onChange={handleCustomUserInputChange}
+                  min="500"
+                  step="100"
+                  className="border border-gray-300 rounded p-2 w-full"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Max Budget ($)
+                </label>
+                <input
+                  type="number"
+                  name="maxBudget"
+                  value={customUserData.maxBudget}
+                  onChange={handleCustomUserInputChange}
+                  min={customUserData.minBudget}
+                  step="100"
+                  className="border border-gray-300 rounded p-2 w-full"
+                />
+              </div>
+            </div>
+            
             <div className="mb-4">
-              <input
-                type="text"
-                placeholder="Search users..."
-                className="border p-2 rounded w-full"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Additional Notes
+              </label>
+              <textarea
+                name="additionalNotes"
+                value={customUserData.additionalNotes}
+                onChange={handleCustomUserInputChange}
+                className="border border-gray-300 rounded p-2 w-full h-24"
+                placeholder="Enter any additional information that might affect compatibility..."
               />
             </div>
             
-            {testUsers.length === 0 ? (
-              <p>No test users found. Add some test users to get started.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full bg-white border">
-                  <thead>
-                    <tr>
-                      <th className="px-4 py-2 border">Email</th>
-                      <th className="px-4 py-2 border">Name</th>
-                      <th className="px-4 py-2 border">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {testUsers
-                      .filter(user => 
-                        searchTerm === '' || 
-                        user.email.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                        user.name.toLowerCase().includes(searchTerm.toLowerCase())
-                      )
-                      .slice(0, showAllUsers ? undefined : 10)
-                      .map(user => (
-                        <tr key={user.email} className={centralUser === user.email ? "bg-blue-100" : ""}>
-                          <td className="px-4 py-2 border">{user.email}</td>
-                          <td className="px-4 py-2 border">{user.name}</td>
+            <div className="flex justify-end">
+              <button
+                onClick={addCustomUser}
+                disabled={addingCustomUser || !customUserData.name || !customUserData.email}
+                className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded disabled:bg-green-400"
+              >
+                {addingCustomUser ? 'Adding...' : 'Add Custom User'}
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {/* Test Users List */}
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold mb-2">Test Users</h2>
+          
+          {loading ? (
+            <p>Loading test users...</p>
+          ) : (
+            <>
+              <div className="mb-4">
+                <input
+                  type="text"
+                  placeholder="Search users..."
+                  className="border p-2 rounded w-full"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              
+              {testUsers.length === 0 ? (
+                <p>No test users found. Add some test users to get started.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full bg-white border">
+                    <thead>
+                      <tr>
+                        <th className="px-4 py-2 border">Email</th>
+                        <th className="px-4 py-2 border">Name</th>
+                        <th className="px-4 py-2 border">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {testUsers
+                        .filter(user => 
+                          searchTerm === '' || 
+                          user.email.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          user.name.toLowerCase().includes(searchTerm.toLowerCase())
+                        )
+                        .slice(0, showAllUsers ? undefined : 10)
+                        .map(user => (
+                          <tr key={user.email} className={centralUser === user.email ? "bg-blue-100" : ""}>
+                            <td className="px-4 py-2 border">{user.email}</td>
+                            <td className="px-4 py-2 border">{user.name}</td>
+                            <td className="px-4 py-2 border">
+                              <button
+                                className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 mr-2"
+                                onClick={() => setCentralUserHandler(user.email)}
+                              >
+                                Set as Central
+                              </button>
+                              <button
+                                className="px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
+                                onClick={() => viewUserDetails(user.email)}
+                              >
+                                View Details
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                  
+                  {testUsers.length > 10 && !showAllUsers && (
+                    <button
+                      className="mt-2 px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
+                      onClick={() => setShowAllUsers(true)}
+                    >
+                      Show All ({testUsers.length})
+                    </button>
+                  )}
+                  
+                  {showAllUsers && (
+                    <button
+                      className="mt-2 px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
+                      onClick={() => setShowAllUsers(false)}
+                    >
+                      Show Less
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+        
+        {/* Compatibility Testing Section */}
+        {centralUser && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+            <h2 className="text-xl font-semibold mb-2">Compatibility Testing</h2>
+            
+            <div className="mb-4">
+              <p><strong>Central User:</strong> {centralUser}</p>
+              <div className="flex items-center mt-2">
+                <label className="mr-2">Minimum Compatibility Score:</label>
+                <input 
+                  type="number" 
+                  value={minCompatibilityScore} 
+                  onChange={(e) => setMinCompatibilityScore(Math.max(0, Math.min(100, parseInt(e.target.value) || 50)))} 
+                  className="border p-2 rounded mr-2"
+                  min="0"
+                  max="100"
+                />
+                <span>%</span>
+              </div>
+              
+              <button
+                className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                onClick={calculateCentralUserCompatibility}
+                disabled={loadingCompatibility}
+              >
+                {loadingCompatibility ? 'Calculating...' : 'Calculate Compatibility'}
+              </button>
+            </div>
+            
+            {/* Compatibility Results */}
+            {compatibilityResults.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Compatible Users ({compatibilityResults.length})</h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full bg-white border">
+                    <thead>
+                      <tr>
+                        <th className="px-4 py-2 border">User</th>
+                        <th className="px-4 py-2 border">Compatibility Score</th>
+                        <th className="px-4 py-2 border">Location Score</th>
+                        <th className="px-4 py-2 border">Budget Score</th>
+                        <th className="px-4 py-2 border">Gender Score</th>
+                        <th className="px-4 py-2 border">Timing Score</th>
+                        <th className="px-4 py-2 border">Preferences Score</th>
+                        <th className="px-4 py-2 border">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {compatibilityResults.map((result, index) => (
+                        <tr key={index}>
+                          <td className="px-4 py-2 border">{result.user.email}</td>
+                          <td className="px-4 py-2 border">{result.score.toFixed(1)}%</td>
+                          <td className="px-4 py-2 border">{result.details.locationScore.toFixed(1)}%</td>
+                          <td className="px-4 py-2 border">{result.details.budgetScore.toFixed(1)}%</td>
+                          <td className="px-4 py-2 border">{result.details.genderScore.toFixed(1)}%</td>
+                          <td className="px-4 py-2 border">{result.details.timingScore.toFixed(1)}%</td>
+                          <td className="px-4 py-2 border">{result.details.preferencesScore.toFixed(1)}%</td>
                           <td className="px-4 py-2 border">
                             <button
-                              className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 mr-2"
-                              onClick={() => setCentralUserHandler(user.email)}
-                            >
-                              Set as Central
-                            </button>
-                            <button
                               className="px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
-                              onClick={() => viewUserDetails(user.email)}
+                              onClick={() => viewUserDetails(result.user.email)}
                             >
                               View Details
                             </button>
                           </td>
                         </tr>
                       ))}
-                  </tbody>
-                </table>
-                
-                {testUsers.length > 10 && !showAllUsers && (
-                  <button
-                    className="mt-2 px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
-                    onClick={() => setShowAllUsers(true)}
-                  >
-                    Show All ({testUsers.length})
-                  </button>
-                )}
-                
-                {showAllUsers && (
-                  <button
-                    className="mt-2 px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
-                    onClick={() => setShowAllUsers(false)}
-                  >
-                    Show Less
-                  </button>
-                )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
       
-      {/* Compatibility Testing Section */}
-      {centralUser && (
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-          <h2 className="text-xl font-semibold mb-2">Compatibility Testing</h2>
-          
-          <div className="mb-4">
-            <p><strong>Central User:</strong> {centralUser}</p>
-            <div className="flex items-center mt-2">
-              <label className="mr-2">Minimum Compatibility Score:</label>
-              <input 
-                type="number" 
-                value={minCompatibilityScore} 
-                onChange={(e) => setMinCompatibilityScore(Math.max(0, Math.min(100, parseInt(e.target.value) || 50)))} 
-                className="border p-2 rounded mr-2"
-                min="0"
-                max="100"
-              />
-              <span>%</span>
-            </div>
-            
-            <button
-              className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-              onClick={calculateCentralUserCompatibility}
-              disabled={loadingCompatibility}
-            >
-              {loadingCompatibility ? 'Calculating...' : 'Calculate Compatibility'}
-            </button>
-          </div>
-          
-          {/* Compatibility Results */}
-          {compatibilityResults.length > 0 && (
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Compatible Users ({compatibilityResults.length})</h3>
-              <div className="overflow-x-auto">
-                <table className="min-w-full bg-white border">
-                  <thead>
-                    <tr>
-                      <th className="px-4 py-2 border">User</th>
-                      <th className="px-4 py-2 border">Compatibility Score</th>
-                      <th className="px-4 py-2 border">Location Score</th>
-                      <th className="px-4 py-2 border">Budget Score</th>
-                      <th className="px-4 py-2 border">Gender Score</th>
-                      <th className="px-4 py-2 border">Timing Score</th>
-                      <th className="px-4 py-2 border">Preferences Score</th>
-                      <th className="px-4 py-2 border">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {compatibilityResults.map((result, index) => (
-                      <tr key={index}>
-                        <td className="px-4 py-2 border">{result.user.email}</td>
-                        <td className="px-4 py-2 border">{result.score.toFixed(1)}%</td>
-                        <td className="px-4 py-2 border">{result.details.locationScore.toFixed(1)}%</td>
-                        <td className="px-4 py-2 border">{result.details.budgetScore.toFixed(1)}%</td>
-                        <td className="px-4 py-2 border">{result.details.genderScore.toFixed(1)}%</td>
-                        <td className="px-4 py-2 border">{result.details.timingScore.toFixed(1)}%</td>
-                        <td className="px-4 py-2 border">{result.details.preferencesScore.toFixed(1)}%</td>
-                        <td className="px-4 py-2 border">
-                          <button
-                            className="px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
-                            onClick={() => viewUserDetails(result.user.email)}
-                          >
-                            View Details
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-      
-      {/* User Details Modal - Modified to show side-by-side comparison */}
+      {/* User Details Modal - Keep clean white styling */}
       {selectedUserDetails && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
           <div className="bg-white p-6 rounded-lg max-w-5xl w-full max-h-screen overflow-y-auto">
@@ -892,7 +1181,7 @@ export default function TestingPage() {
                 {selectedUserDetails.compatibilityScore && (
                   <div className="bg-blue-50 p-4 mb-4 rounded-lg">
                     <h3 className="font-semibold text-lg mb-2">Compatibility Score: {selectedUserDetails.compatibilityScore.score.toFixed(1)}%</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-2">
                       <div className="bg-white p-2 rounded">
                         <div className="font-medium">Location</div>
                         <div className="text-lg">{selectedUserDetails.compatibilityScore.details.locationScore.toFixed(1)}%</div>
@@ -942,7 +1231,7 @@ export default function TestingPage() {
                         <p><strong>Internship Start:</strong> {formatDate(selectedUserDetails.centralUser.surveyData.internshipStartDate)}</p>
                         <p><strong>Internship End:</strong> {formatDate(selectedUserDetails.centralUser.surveyData.internshipEndDate)}</p>
                         <p><strong>Desired Roommates:</strong> {selectedUserDetails.centralUser.surveyData.desiredRoommates || 'N/A'}</p>
-                        <p><strong>Monthly Budget:</strong> ${selectedUserDetails.centralUser.surveyData.monthlyBudget?.toLocaleString() || 'N/A'}</p>
+                        <p><strong>Monthly Budget:</strong> ${selectedUserDetails.centralUser.surveyData.minBudget?.toLocaleString() || 'N/A'} - ${selectedUserDetails.centralUser.surveyData.maxBudget?.toLocaleString() || 'N/A'}</p>
                       </div>
                       
                       <div>
@@ -982,7 +1271,7 @@ export default function TestingPage() {
                         <p><strong>Internship Start:</strong> {formatDate(selectedUserDetails.user.surveyData.internshipStartDate)}</p>
                         <p><strong>Internship End:</strong> {formatDate(selectedUserDetails.user.surveyData.internshipEndDate)}</p>
                         <p><strong>Desired Roommates:</strong> {selectedUserDetails.user.surveyData.desiredRoommates || 'N/A'}</p>
-                        <p><strong>Monthly Budget:</strong> ${selectedUserDetails.user.surveyData.monthlyBudget?.toLocaleString() || 'N/A'}</p>
+                        <p><strong>Monthly Budget:</strong> ${selectedUserDetails.user.surveyData.minBudget?.toLocaleString() || 'N/A'} - ${selectedUserDetails.user.surveyData.maxBudget?.toLocaleString() || 'N/A'}</p>
                       </div>
                       
                       <div>
@@ -999,14 +1288,54 @@ export default function TestingPage() {
                   </div>
                 </div>
                 
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <h4 className="font-semibold">Central User Notes</h4>
-                    <p>{selectedUserDetails.centralUser.surveyData.additionalNotes || 'No additional notes'}</p>
+                {/* Enhance the additional notes section */}
+                <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <h3 className="font-semibold text-lg mb-3 text-yellow-800">Additional Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="font-semibold text-yellow-700">Central User Notes</h4>
+                      <p className="mt-2 p-3 bg-white rounded border border-yellow-100">
+                        {selectedUserDetails.centralUser.surveyData.additionalNotes || 'No additional notes provided'}
+                      </p>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-yellow-700">Compared User Notes</h4>
+                      <p className="mt-2 p-3 bg-white rounded border border-yellow-100">
+                        {selectedUserDetails.user.surveyData.additionalNotes || 'No additional notes provided'}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-semibold">Compared User Notes</h4>
-                    <p>{selectedUserDetails.user.surveyData.additionalNotes || 'No additional notes'}</p>
+                  <div className="mt-4 p-3 bg-white rounded border border-yellow-100">
+                    <h4 className="font-semibold text-yellow-700 mb-2">How Additional Notes Affect Compatibility</h4>
+                    <p className="text-sm text-gray-700">
+                      After finding compatible matches based on structured criteria (location, budget, gender, timing, preferences),
+                      the system analyzes the additional notes to adjust the compatibility score by up to ±10%.
+                    </p>
+                    <p className="text-sm text-gray-700 mt-2">
+                      <strong>Important:</strong> If the adjustment would lower a user's compatibility below the minimum threshold 
+                      (currently {minCompatibilityScore}%), that user will not appear in your matches.
+                    </p>
+                    {selectedUserDetails.compatibilityScore?.details?.additionalInfoScore !== undefined && (
+                      <div className="mt-3 p-2 rounded bg-yellow-50">
+                        <p className="text-sm flex items-center">
+                          <span className="font-medium">Note analysis impact:</span>
+                          <span className="ml-2">
+                            {((selectedUserDetails.compatibilityScore.details.additionalInfoScore - 50) / 5).toFixed(1)}% adjustment
+                            {selectedUserDetails.compatibilityScore.details.additionalInfoScore > 50 ? 
+                              " (positive)" : selectedUserDetails.compatibilityScore.details.additionalInfoScore < 50 ? 
+                              " (negative)" : " (neutral)"}
+                          </span>
+                        </p>
+                        {selectedUserDetails.compatibilityScore.explanation && (
+                          <div className="mt-2 p-2 bg-white rounded border border-yellow-100">
+                            <h5 className="font-medium text-yellow-800 text-sm">LLM Analysis:</h5>
+                            <p className="text-sm text-gray-700 mt-1">
+                              {selectedUserDetails.compatibilityScore.explanation}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 
@@ -1029,7 +1358,7 @@ export default function TestingPage() {
                 </div>
               </>
             ) : (
-              // Original single user view
+              // Single user view - update additional notes section
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -1051,7 +1380,7 @@ export default function TestingPage() {
                     <p><strong>Internship Start:</strong> {formatDate(selectedUserDetails.user.surveyData.internshipStartDate)}</p>
                     <p><strong>Internship End:</strong> {formatDate(selectedUserDetails.user.surveyData.internshipEndDate)}</p>
                     <p><strong>Desired Roommates:</strong> {selectedUserDetails.user.surveyData.desiredRoommates || 'N/A'}</p>
-                    <p><strong>Monthly Budget:</strong> ${selectedUserDetails.user.surveyData.monthlyBudget?.toLocaleString() || 'N/A'}</p>
+                    <p><strong>Monthly Budget:</strong> ${selectedUserDetails.user.surveyData.minBudget?.toLocaleString() || 'N/A'} - ${selectedUserDetails.user.surveyData.maxBudget?.toLocaleString() || 'N/A'}</p>
                   </div>
                   
                   <div>
@@ -1065,9 +1394,22 @@ export default function TestingPage() {
                     </div>
                   </div>
                   
-                  <div className="md:col-span-2">
-                    <h3 className="font-semibold text-lg">Additional Notes</h3>
-                    <p>{selectedUserDetails.user.surveyData.additionalNotes || 'No additional notes'}</p>
+                  <div className="md:col-span-2 mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <h3 className="font-semibold text-lg text-yellow-800">Additional Notes</h3>
+                    <p className="mt-2 p-3 bg-white rounded border border-yellow-100">
+                      {selectedUserDetails.user.surveyData.additionalNotes || 'No additional notes provided'}
+                    </p>
+                    <div className="mt-4 p-3 bg-white rounded border border-yellow-100">
+                      <h4 className="font-semibold text-yellow-700 mb-2">How Additional Notes Affect Compatibility</h4>
+                      <p className="text-sm text-gray-700">
+                        After finding compatible matches based on structured criteria (location, budget, gender, timing, preferences),
+                        the system analyzes the additional notes to adjust the compatibility score by up to ±10%.
+                      </p>
+                      <p className="text-sm text-gray-700 mt-2">
+                        <strong>Important:</strong> If the adjustment would lower a user's compatibility below the minimum threshold,
+                        that user will not appear in your matches.
+                      </p>
+                    </div>
                   </div>
                 </div>
                 
