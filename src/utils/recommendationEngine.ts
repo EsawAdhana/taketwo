@@ -206,6 +206,11 @@ export function calculateCompatibilityScore(user: SurveyFormData, potentialMatch
     return null;
   }
   
+  // Prevent matching a user with themselves
+  if (user.userEmail && potentialMatch.userEmail && user.userEmail === potentialMatch.userEmail) {
+    return null;
+  }
+  
   // Check hard constraints first
   if (!passesHardConstraints(user, potentialMatch)) {
     return null;
@@ -423,6 +428,21 @@ export async function calculateEnhancedCompatibilityScore(
   potentialMatch: SurveyFormData,
   minCompatibilityThreshold?: number
 ): Promise<CompatibilityScore | null> {
+  // Skip inactive or incomplete profiles
+  if (!user.isSubmitted || !potentialMatch.isSubmitted) {
+    return null;
+  }
+  
+  // Prevent matching a user with themselves
+  if (user.userEmail && potentialMatch.userEmail && user.userEmail === potentialMatch.userEmail) {
+    return null;
+  }
+  
+  // Check hard constraints first
+  if (!passesHardConstraints(user, potentialMatch)) {
+    return null;
+  }
+  
   // First get the base compatibility score using structured data only
   const baseScore = calculateCompatibilityScore(user, potentialMatch);
   
@@ -671,6 +691,11 @@ export async function compareUsers(
   }
 }> {
   try {
+    // Add check to prevent self-comparison
+    if (userEmail1 === userEmail2) {
+      throw new Error('Cannot compare a user with themselves');
+    }
+
     const client = (await import('@/lib/mongodb')).default;
     const mongodb = await client;
     const db = mongodb.db('taketwo');

@@ -77,7 +77,15 @@ export default function TestingPage() {
     desiredRoommates: '2',
     minBudget: 1500,
     maxBudget: 2500,
-    additionalNotes: ''
+    additionalNotes: '',
+    preferences: [
+      { item: "Okay with pets", strength: "neutral" },
+      { item: "Okay with alcohol", strength: "neutral" },
+      { item: "Okay with parties", strength: "neutral" },
+      { item: "Okay with visitors", strength: "neutral" },
+      { item: "Okay with visitors staying overnight", strength: "neutral" },
+      { item: "LGBTQ+/Ally", strength: "neutral" },
+    ]
   });
   
   useEffect(() => {
@@ -582,6 +590,21 @@ export default function TestingPage() {
         }
       }
       setCustomUserData(prev => ({ ...prev, [name]: selectedCities }));
+    } else if (name.startsWith('preference_')) {
+      // Handle preference strength changes
+      const [_, preferenceIndex] = name.split('_');
+      const index = parseInt(preferenceIndex, 10);
+      
+      const updatedPreferences = [...customUserData.preferences];
+      updatedPreferences[index] = {
+        ...updatedPreferences[index],
+        strength: value
+      };
+      
+      setCustomUserData(prev => ({
+        ...prev,
+        preferences: updatedPreferences
+      }));
     } else {
       setCustomUserData(prev => ({ ...prev, [name]: value }));
     }
@@ -641,7 +664,15 @@ export default function TestingPage() {
           desiredRoommates: '2',
           minBudget: 1500,
           maxBudget: 2500,
-          additionalNotes: ''
+          additionalNotes: '',
+          preferences: [
+            { item: "Okay with pets", strength: "neutral" },
+            { item: "Okay with alcohol", strength: "neutral" },
+            { item: "Okay with parties", strength: "neutral" },
+            { item: "Okay with visitors", strength: "neutral" },
+            { item: "Okay with visitors staying overnight", strength: "neutral" },
+            { item: "LGBTQ+/Ally", strength: "neutral" },
+          ]
         });
         
         // Refresh the test users list
@@ -985,6 +1016,32 @@ export default function TestingPage() {
                 className="border border-gray-300 rounded p-2 w-full h-24"
                 placeholder="Enter any additional information that might affect compatibility..."
               />
+            </div>
+            
+            {/* Preferences Section */}
+            <div className="mb-4">
+              <h4 className="text-md font-medium text-gray-800 mb-2">Preferences</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {customUserData.preferences.map((preference, index) => (
+                  <div key={index} className="flex flex-col">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {preference.item}
+                    </label>
+                    <select
+                      name={`preference_${index}`}
+                      value={preference.strength}
+                      onChange={handleCustomUserInputChange}
+                      className="border border-gray-300 rounded p-2"
+                    >
+                      <option value="deal breaker">Deal Breaker</option>
+                      <option value="prefer not">Prefer Not</option>
+                      <option value="neutral">Neutral</option>
+                      <option value="prefer">Prefer</option>
+                      <option value="must have">Must Have</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
             </div>
             
             <div className="flex justify-end">
