@@ -69,10 +69,22 @@ export async function GET(req: NextRequest) {
       userProfileMap.set(profile.email, profile);
     });
     
-    // Enrich match data with user profiles
+    // Fetch survey data for the matches
+    const surveyData = await db.collection('surveys')
+      .find({ userEmail: { $in: matchEmails } })
+      .toArray();
+    
+    // Create a map of user emails to survey data for easy lookup
+    const surveyDataMap = new Map();
+    surveyData.forEach(data => {
+      surveyDataMap.set(data.userEmail, data);
+    });
+    
+    // Enrich match data with user profiles and survey data
     const enrichedMatches = matches.map(match => ({
       ...match,
-      userProfile: userProfileMap.get(match.userEmail) || { email: match.userEmail }
+      userProfile: userProfileMap.get(match.userEmail) || { email: match.userEmail },
+      fullProfile: surveyDataMap.get(match.userEmail) || null
     }));
 
     return NextResponse.json({ matches: enrichedMatches });

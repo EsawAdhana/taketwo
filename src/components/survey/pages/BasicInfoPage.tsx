@@ -8,7 +8,7 @@ interface BasicInfoPageProps {
 }
 
 export default function BasicInfoPage({ formData, setFormData }: BasicInfoPageProps) {
-  const handleInputChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
@@ -19,8 +19,32 @@ export default function BasicInfoPage({ formData, setFormData }: BasicInfoPagePr
   };
   
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Basic Information</h2>
+      
+      {/* Privacy Notice */}
+      <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-lg">
+        <p className="text-sm text-blue-800 dark:text-blue-200">
+          Please note that the information you provide in this survey will be visible to other users.
+        </p>
+      </div>
+      
+      {/* First Name */}
+      <div>
+        <label className="block mb-2 font-medium text-gray-900 dark:text-gray-100" htmlFor="firstName">
+          What is your first name? *
+        </label>
+        <input
+          type="text"
+          id="firstName"
+          name="firstName"
+          className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          value={formData.firstName}
+          onChange={handleInputChange}
+          required
+          placeholder="Enter your first name"
+        />
+      </div>
       
       {/* Gender Selection */}
       <div>

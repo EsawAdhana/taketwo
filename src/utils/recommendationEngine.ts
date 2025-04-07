@@ -37,6 +37,7 @@ const PREFERENCE_VALUES: Record<PreferenceStrength, number> = {
 // Convert MongoDB document to SurveyFormData
 function documentToSurveyData(doc: WithId<Document>): SurveyFormData {
   return {
+    firstName: doc.firstName || '',
     gender: doc.gender || '',
     roomWithDifferentGender: !!doc.roomWithDifferentGender,
     housingRegion: doc.housingRegion || '',

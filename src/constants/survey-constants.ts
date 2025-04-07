@@ -28,6 +28,7 @@ export interface Preference {
 
 export interface SurveyFormData {
   // Page 1: Basic Info
+  firstName: string;
   gender: string;
   roomWithDifferentGender: boolean;
   
@@ -56,6 +57,7 @@ export interface SurveyFormData {
 }
 
 export const INITIAL_FORM_DATA: SurveyFormData = {
+  firstName: "",
   gender: "",
   roomWithDifferentGender: false,
   housingRegion: "",

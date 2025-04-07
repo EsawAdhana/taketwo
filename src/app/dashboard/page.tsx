@@ -38,6 +38,7 @@ interface UserDetailProfile extends CompatibilityMatch {
     maxBudget?: number;
     preferences?: Array<{item: string; strength: string}>;
     additionalNotes?: string;
+    firstName?: string;
   }
 }
 
@@ -133,11 +134,16 @@ export default function DashboardPage() {
   };
   
   // Helper function to get first name
-  const getFirstName = (user: {name?: string; email: string}): string => {
+  const getFirstName = (user: {name?: string; email: string}, fullProfile?: any): string => {
+    // First check if firstName exists in the fullProfile
+    if (fullProfile?.firstName) {
+      return fullProfile.firstName;
+    }
+    // Then check if name exists in the user profile
     if (user.name) {
       return user.name.split(' ')[0];
     }
-    // Extract name from email if no display name
+    // Finally, extract from email as a last resort
     const emailName = user.email.split('@')[0];
     // Capitalize first letter and handle usernames with numbers or special chars
     const namePart = emailName.split(/[^a-zA-Z]/, 1)[0];
@@ -212,7 +218,7 @@ export default function DashboardPage() {
                   };
                   
                   // Get display name (first name only)
-                  const displayName = getFirstName(match.userProfile);
+                  const displayName = getFirstName(match.userProfile, match.fullProfile);
                   
                   return (
                     <div 
@@ -309,10 +315,10 @@ function UserDetailsModal({
   onClose: () => void,
   formatDate: (date: string) => string,
   loadingDetails: boolean,
-  getFirstName: (user: {name?: string; email: string}) => string
+  getFirstName: (user: {name?: string; email: string}, fullProfile?: any) => string
 }) {
   // Get display name
-  const displayName = getFirstName(match.userProfile);
+  const displayName = getFirstName(match.userProfile, match.fullProfile);
   
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-10">
@@ -393,6 +399,7 @@ function UserDetailsModal({
                     <FiUsers className="mr-2" /> Basic Information
                   </h3>
                   <div className="bg-gray-50 p-5 rounded-xl shadow-sm border border-gray-100">
+                    <p className="mb-2"><strong>First Name:</strong> {match.fullProfile.firstName || 'Not specified'}</p>
                     <p className="mb-2"><strong>Gender:</strong> {match.fullProfile.gender || 'Not specified'}</p>
                     <p className="mb-2"><strong>Room with Different Gender:</strong> {match.fullProfile.roomWithDifferentGender ? 'Yes' : 'No'}</p>
                     <p><strong>Desired Roommates:</strong> {match.fullProfile.desiredRoommates || 'Not specified'}</p>
