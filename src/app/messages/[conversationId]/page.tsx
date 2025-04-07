@@ -6,6 +6,12 @@ import { io } from 'socket.io-client';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
+interface Participant {
+  _id: string;
+  name: string;
+  image: string;
+}
+
 interface Message {
   _id: string;
   content: string;
@@ -14,26 +20,20 @@ interface Message {
     name: string;
     image: string;
   };
-  receiverId: {
+  readBy: {
     _id: string;
     name: string;
     image: string;
-  };
+  }[];
   createdAt: string;
 }
 
 interface Conversation {
   _id: string;
-  userId: {
-    _id: string;
-    name: string;
-    image: string;
-  };
-  otherUserId: {
-    _id: string;
-    name: string;
-    image: string;
-  };
+  participants: Participant[];
+  otherParticipants: Participant[];
+  isGroup: boolean;
+  name: string;
 }
 
 export default function ConversationPage({
@@ -64,6 +64,19 @@ export default function ConversationPage({
       socket.on('new-message', (message: Message) => {
         setMessages((prev) => [...prev, message]);
         scrollToBottom();
+      });
+
+      socket.on('message-read', (data: { messageId: string; userId: string }) => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg._id === data.messageId
+              ? {
+                  ...msg,
+                  readBy: [...msg.readBy, { _id: data.userId }],
+                }
+              : msg
+          )
+        );
       });
 
       return () => {
@@ -114,9 +127,6 @@ export default function ConversationPage({
 
     const messageData = {
       content: newMessage,
-      receiverId: conversation.userId._id === session?.user?.id
-        ? conversation.otherUserId._id
-        : conversation.userId._id,
       conversationId: params.conversationId,
     };
 
@@ -128,9 +138,19 @@ export default function ConversationPage({
     return <div>Loading...</div>;
   }
 
-  const otherUser = conversation.userId._id === session?.user?.id
-    ? conversation.otherUserId
-    : conversation.userId;
+  const getConversationName = () => {
+    if (conversation.isGroup) {
+      return conversation.name;
+    }
+    return conversation.otherParticipants[0]?.name || 'Unknown User';
+  };
+
+  const getConversationImage = () => {
+    if (conversation.isGroup) {
+      return '/group-avatar.png'; // You might want to use a different default image for groups
+    }
+    return conversation.otherParticipants[0]?.image || '/default-avatar.png';
+  };
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -138,13 +158,20 @@ export default function ConversationPage({
         <div className="flex items-center space-x-4 mb-6">
           <div className="relative w-12 h-12">
             <Image
-              src={otherUser.image || '/default-avatar.png'}
-              alt={otherUser.name || 'User'}
+              src={getConversationImage()}
+              alt={getConversationName()}
               fill
               className="rounded-full object-cover"
             />
           </div>
-          <h1 className="text-2xl font-bold">{otherUser.name}</h1>
+          <div>
+            <h1 className="text-2xl font-bold">{getConversationName()}</h1>
+            {conversation.isGroup && (
+              <p className="text-sm text-gray-500">
+                {conversation.otherParticipants.length + 1} participants
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-lg p-4 h-[600px] flex flex-col">
@@ -166,9 +193,16 @@ export default function ConversationPage({
                   }`}
                 >
                   <p>{message.content}</p>
-                  <p className="text-xs mt-1 opacity-70">
-                    {new Date(message.createdAt).toLocaleTimeString()}
-                  </p>
+                  <div className="flex items-center justify-end space-x-1 mt-1">
+                    <p className="text-xs opacity-70">
+                      {new Date(message.createdAt).toLocaleTimeString()}
+                    </p>
+                    {message.senderId._id === session?.user?.id && (
+                      <span className="text-xs">
+                        {message.readBy.length > 1 ? '✓✓' : '✓'}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

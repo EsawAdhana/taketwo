@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     }
 
     const client = await clientPromise;
-    const db = client.db('taketwo');
+    const db = client.db('monkeyhouse');
 
     // Find the user's survey data
     const surveyData = await db.collection('surveys').findOne({
@@ -71,7 +71,7 @@ export async function DELETE() {
     }
 
     const client = await clientPromise;
-    const db = client.db('taketwo');
+    const db = client.db('monkeyhouse');
 
     // Delete the user's survey data
     const result = await db.collection('surveys').deleteOne({

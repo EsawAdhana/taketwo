@@ -20,10 +20,16 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Conversation ID is required' }, { status: 400 });
     }
 
+    // Verify user is part of the conversation
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation || !conversation.participants.includes(session.user.id)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const messages = await Message.find({ conversationId })
       .sort({ createdAt: 1 })
       .populate('senderId', 'name image')
-      .populate('receiverId', 'name image');
+      .populate('readBy', 'name image');
 
     return NextResponse.json(messages);
   } catch (error) {
@@ -39,19 +45,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { content, receiverId, conversationId } = await req.json();
+    const { content, conversationId } = await req.json();
 
-    if (!content || !receiverId || !conversationId) {
+    if (!content || !conversationId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
     await connectDB();
 
+    // Verify user is part of the conversation
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation || !conversation.participants.includes(session.user.id)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const message = await Message.create({
       content,
       senderId: session.user.id,
-      receiverId,
       conversationId,
+      readBy: [session.user.id] // Mark as read by sender
     });
 
     // Update conversation's last message
@@ -59,7 +71,12 @@ export async function POST(req: Request) {
       lastMessage: message._id,
     });
 
-    return NextResponse.json(message);
+    // Populate the message with sender details
+    const populatedMessage = await Message.findById(message._id)
+      .populate('senderId', 'name image')
+      .populate('readBy', 'name image');
+
+    return NextResponse.json(populatedMessage);
   } catch (error) {
     console.error('Error creating message:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

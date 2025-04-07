@@ -20,7 +20,7 @@ export async function GET() {
     }
     
     const client = await clientPromise;
-    const db = client.db('taketwo');
+    const db = client.db('monkeyhouse');
     console.log("Connected to database:", db.databaseName);
     
     // Get test users from test_surveys collection

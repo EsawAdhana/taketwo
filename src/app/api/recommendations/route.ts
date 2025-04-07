@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     if (isTest && process.env.NODE_ENV !== 'production') {
       const client = (await import('@/lib/mongodb')).default;
       const mongodb = await client;
-      const db = mongodb.db('taketwo');
+      const db = mongodb.db('monkeyhouse');
       
       // Find all users whose email contains "test" using a string pattern
       const testUsers = await db.collection('users')
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
     // Get email addresses of the matches
     const client = (await import('@/lib/mongodb')).default;
     const mongodb = await client;
-    const db = mongodb.db('taketwo');
+    const db = mongodb.db('monkeyhouse');
     
     // Fetch user profiles for the matches
     const matchEmails = matches.map(match => match.userEmail);

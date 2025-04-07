@@ -11,7 +11,7 @@ export async function GET() {
     }
     
     const client = await clientPromise;
-    const db = client.db('taketwo');
+    const db = client.db('monkeyhouse');
     
     // Check regular surveys collection first
     let survey = await db.collection('surveys').findOne({
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     
     const data = await req.json();
     const client = await clientPromise;
-    const db = client.db('taketwo');
+    const db = client.db('monkeyhouse');
     
     // Remove _id from data if it exists
     const { _id, ...surveyData } = data;

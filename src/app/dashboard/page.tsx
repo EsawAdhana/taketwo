@@ -5,7 +5,8 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { SurveyFormData } from '@/constants/survey-constants';
 import Image from 'next/image';
-import { FiUsers, FiHome, FiDollarSign, FiCalendar, FiList, FiStar } from 'react-icons/fi';
+import { FiUsers, FiHome, FiDollarSign, FiCalendar, FiList, FiStar, FiSend } from 'react-icons/fi';
+import DMButton from '@/components/DMButton';
 
 interface CompatibilityMatch {
   userEmail: string;
@@ -253,6 +254,11 @@ export default function DashboardPage() {
                             <FiStar className="mr-1" /> {Math.round(match.score)}% Match
                           </div>
                         </div>
+                        <DMButton
+                          userId={match.userProfile._id}
+                          userName={displayName}
+                          userImage={match.userProfile.image}
+                        />
                       </div>
                       
                       <div className="grid grid-cols-2 gap-2 mt-2">
@@ -341,12 +347,19 @@ function UserDetailsModal({
               )}
               {displayName}
             </h2>
-            <button 
-              className="w-8 h-8 flex items-center justify-center rounded-full bg-white bg-opacity-25 text-white hover:bg-opacity-40 transition-colors"
-              onClick={onClose}
-            >
-              ×
-            </button>
+            <div className="flex items-center gap-2">
+              <DMButton
+                userId={match.userProfile._id}
+                userName={getFirstName(match.userProfile, match.fullProfile)}
+                userImage={match.userProfile.image}
+              />
+              <button 
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-white bg-opacity-25 text-white hover:bg-opacity-40 transition-colors"
+                onClick={onClose}
+              >
+                ×
+              </button>
+            </div>
           </div>
         </div>
 
@@ -474,15 +487,6 @@ function UserDetailsModal({
               <p>Limited information available. Contact this user for more details.</p>
             </div>
           )}
-          
-          <div className="mt-6 pt-4 border-t text-right">
-            <button
-              className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full hover:from-blue-700 hover:to-indigo-700 font-medium shadow-sm"
-              onClick={onClose}
-            >
-              Close
-            </button>
-          </div>
         </div>
       </div>
     </div>

@@ -7,7 +7,7 @@ import SettingsButton from '@/components/SettingsButton';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'TakeTwo',
+  title: 'MonkeyHouse',
   description: 'Find your perfect roommate match for your internship',
 };
 

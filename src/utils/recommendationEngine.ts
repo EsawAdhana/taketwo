@@ -495,7 +495,7 @@ export async function getRecommendedMatches(
   try {
     const client = (await import('@/lib/mongodb')).default;
     const mongodb = await client;
-    const db = mongodb.db('taketwo');
+    const db = mongodb.db('monkeyhouse');
     
     // Get the user's survey data
     let userDoc;
@@ -579,7 +579,7 @@ export async function getTopMatchesByRegion(
   try {
     const client = (await import('@/lib/mongodb')).default;
     const mongodb = await client;
-    const db = mongodb.db('taketwo');
+    const db = mongodb.db('monkeyhouse');
     
     // Get the user's survey data
     let userDoc;
@@ -684,7 +684,7 @@ export async function compareUsers(
 
     const client = (await import('@/lib/mongodb')).default;
     const mongodb = await client;
-    const db = mongodb.db('taketwo');
+    const db = mongodb.db('monkeyhouse');
     
     // Determine if this is a test user
     const isTestUser1 = !await db.collection('surveys').findOne({ userEmail: userEmail1 });

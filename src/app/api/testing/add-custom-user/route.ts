@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     
     // Connect to MongoDB
     const client = await clientPromise;
-    const db = client.db("taketwo");
+    const db = client.db("monkeyhouse");
     const collection = db.collection("test_surveys");
     
     // Check if a test user with this email already exists

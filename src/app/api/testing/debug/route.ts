@@ -18,7 +18,7 @@ export async function GET() {
     }
     
     const client = await clientPromise;
-    const db = client.db('taketwo');
+    const db = client.db('monkeyhouse');
     
     // Check if MongoDB connection is working
     const dbStatus = {

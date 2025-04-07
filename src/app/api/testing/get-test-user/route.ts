@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
     }
     
     const client = await clientPromise;
-    const db = client.db('taketwo');
+    const db = client.db('monkeyhouse');
     
     // Check if test_surveys collection exists
     const collections = await db.listCollections({ name: 'test_surveys' }).toArray();

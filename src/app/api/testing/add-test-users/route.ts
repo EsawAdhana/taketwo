@@ -322,7 +322,7 @@ export async function POST(req: NextRequest) {
     }
     
     const client = await clientPromise;
-    const db = client.db('taketwo');
+    const db = client.db('monkeyhouse');
     console.log("Connected to database:", db.databaseName);
     
     // Check if test_surveys collection exists, create it if not

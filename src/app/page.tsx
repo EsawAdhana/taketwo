@@ -35,7 +35,7 @@ export default function Home() {
     <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-8">
       <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-8">
         <h1 className="text-4xl font-bold mb-8 text-center text-gray-800">
-          Welcome to TakeTwo
+          Welcome to MonkeyHouse
         </h1>
         
         <div className="text-center">

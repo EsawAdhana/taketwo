@@ -1,6 +1,7 @@
 import { Server as NetServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { NextApiResponse } from 'next';
+import { getSession } from 'next-auth/react';
 import Message from '@/models/Message';
 import Conversation from '@/models/Conversation';
 import connectDB from './mongodb';
@@ -23,39 +24,37 @@ export const initSocket = (res: NextApiResponseWithSocket) => {
 
       socket.on('join-conversation', (conversationId: string) => {
         socket.join(conversationId);
+        console.log(`Joined conversation: ${conversationId}`);
       });
 
       socket.on('leave-conversation', (conversationId: string) => {
         socket.leave(conversationId);
+        console.log(`Left conversation: ${conversationId}`);
       });
 
-      socket.on('send-message', async (data: {
-        content: string;
-        senderId: string;
-        receiverId: string;
-        conversationId: string;
-      }) => {
-        try {
-          await connectDB();
-          
-          const message = await Message.create({
-            content: data.content,
-            senderId: data.senderId,
-            receiverId: data.receiverId,
-            conversationId: data.conversationId,
-          });
-
-          // Update conversation's last message
-          await Conversation.findByIdAndUpdate(data.conversationId, {
-            lastMessage: message._id,
-          });
-
-          // Emit the message to both users
-          io.to(data.conversationId).emit('new-message', message);
-        } catch (error) {
-          console.error('Error sending message:', error);
-          socket.emit('error', 'Failed to send message');
+      socket.on('send-message', async (messageData) => {
+        const session = await getSession({ req: socket.request as any });
+        if (!session?.user) {
+          socket.emit('error', 'Unauthorized');
+          return;
         }
+
+        // Broadcast the message to all users in the conversation
+        io.to(messageData.conversationId).emit('new-message', messageData);
+      });
+
+      socket.on('mark-as-read', async (data: { conversationId: string; messageId: string }) => {
+        const session = await getSession({ req: socket.request as any });
+        if (!session?.user) {
+          socket.emit('error', 'Unauthorized');
+          return;
+        }
+
+        // Notify other participants that the message was read
+        socket.to(data.conversationId).emit('message-read', {
+          messageId: data.messageId,
+          userId: session.user.id
+        });
       });
 
       socket.on('disconnect', () => {
