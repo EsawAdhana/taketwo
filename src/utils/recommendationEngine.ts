@@ -428,21 +428,6 @@ export async function calculateEnhancedCompatibilityScore(
   potentialMatch: SurveyFormData,
   minCompatibilityThreshold?: number
 ): Promise<CompatibilityScore | null> {
-  // Skip inactive or incomplete profiles
-  if (!user.isSubmitted || !potentialMatch.isSubmitted) {
-    return null;
-  }
-  
-  // Prevent matching a user with themselves
-  if (user.userEmail && potentialMatch.userEmail && user.userEmail === potentialMatch.userEmail) {
-    return null;
-  }
-  
-  // Check hard constraints first
-  if (!passesHardConstraints(user, potentialMatch)) {
-    return null;
-  }
-  
   // First get the base compatibility score using structured data only
   const baseScore = calculateCompatibilityScore(user, potentialMatch);
   
