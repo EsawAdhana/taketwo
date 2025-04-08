@@ -291,24 +291,24 @@ export default function ConversationPage({
 
   if (!conversation) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="animate-pulse text-gray-400">Loading conversation...</div>
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="animate-pulse text-gray-600">Loading conversation...</div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-900">
+    <div className="flex flex-col h-screen bg-white">
       {/* Conversation header */}
-      <div className="bg-gray-800 border-b border-gray-700 p-4 flex items-center justify-between">
+      <div className="bg-white border-b border-gray-200 p-4 flex items-center justify-between">
         <div className="flex items-center space-x-3">
           {conversation && (
             <>
               <button 
                 onClick={() => router.push('/messages')}
-                className="p-1 rounded-full hover:bg-gray-700"
+                className="p-1 rounded-full hover:bg-gray-100"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
@@ -322,13 +322,13 @@ export default function ConversationPage({
                   />
                 </div>
                 <div>
-                  <h1 className="font-semibold text-white">
+                  <h1 className="font-semibold text-gray-900">
                     {conversation.isGroup
                       ? conversation.name
                       : conversation.otherParticipants[0]?.name || 'Unknown User'}
                   </h1>
                   {conversation.isGroup && (
-                    <p className="text-sm text-gray-400">
+                    <p className="text-sm text-gray-500">
                       {conversation.participants.length} participants
                     </p>
                   )}
@@ -343,10 +343,10 @@ export default function ConversationPage({
           {/* Home button */}
           <button 
             onClick={() => router.push('/dashboard')}
-            className="p-2 rounded-full hover:bg-gray-700"
+            className="p-2 rounded-full hover:bg-gray-100"
             aria-label="Dashboard"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
             </svg>
           </button>
@@ -354,10 +354,10 @@ export default function ConversationPage({
           {/* Settings button */}
           <button 
             onClick={() => router.push('/settings')}
-            className="p-2 rounded-full hover:bg-gray-700"
+            className="p-2 rounded-full hover:bg-gray-100"
             aria-label="Settings"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
@@ -366,19 +366,19 @@ export default function ConversationPage({
           {/* Delete conversation button (in dropdown) */}
           <div className="relative group">
             <button
-              className="p-2 rounded-full hover:bg-gray-700"
+              className="p-2 rounded-full hover:bg-gray-100"
               aria-label="More options"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
               </svg>
             </button>
-            <div className="absolute right-0 mt-1 w-48 bg-gray-700 rounded-md shadow-lg z-10 hidden group-hover:block">
+            <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg z-10 hidden group-hover:block">
               <div className="py-1">
                 <button
                   onClick={deleteConversation}
                   disabled={isDeleting}
-                  className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-600 flex items-center"
+                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 flex items-center"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -394,7 +394,7 @@ export default function ConversationPage({
       {/* Messages */}
       <div 
         id="messages-container"
-        className="flex-1 overflow-y-auto p-4 space-y-4"
+        className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50"
       >
         {isLoading ? (
           <div className="flex justify-center">
@@ -418,8 +418,8 @@ export default function ConversationPage({
               <div
                 className={`max-w-[70%] rounded-lg p-3 ${
                   message.senderId._id === session?.user?.id
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-700 text-white'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-white text-gray-900 shadow-sm border border-gray-200'
                 }`}
               >
                 {message.senderId._id !== session?.user?.id && (
@@ -455,7 +455,7 @@ export default function ConversationPage({
                             .map((reader) => (
                               <div
                                 key={reader._id}
-                                className="relative w-4 h-4 rounded-full border border-gray-800"
+                                className="relative w-4 h-4 rounded-full border border-white"
                               >
                                 <Image
                                   src={reader.image || '/default-avatar.png'}
@@ -466,8 +466,8 @@ export default function ConversationPage({
                               </div>
                             ))}
                           {message.readBy.length > 3 && (
-                            <div className="relative w-4 h-4 rounded-full bg-gray-700 flex items-center justify-center">
-                              <span className="text-[8px] text-white">
+                            <div className="relative w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center">
+                              <span className="text-[8px] text-gray-600">
                                 +{message.readBy.length - 3}
                               </span>
                             </div>
@@ -487,19 +487,19 @@ export default function ConversationPage({
       </div>
 
       {/* Message Input */}
-      <div className="p-4 border-t border-gray-800">
+      <div className="p-4 border-t border-gray-200 bg-white">
         <form onSubmit={sendMessage} className="flex space-x-2">
           <input
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Type a message..."
-            className="flex-1 bg-gray-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 bg-gray-50 text-gray-900 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-200"
             disabled={isSending}
           />
           <button
             type="submit"
-            className="bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            className="bg-blue-500 text-white rounded-lg px-4 py-2 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
             disabled={!newMessage.trim() || isSending}
           >
             {isSending ? (

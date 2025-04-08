@@ -50,24 +50,24 @@ export default function LocationPage({ formData, setFormData }: LocationPageProp
   
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Location Preferences</h2>
+      <h2 className="text-2xl font-semibold text-gray-900">Location Preferences</h2>
       
       {/* Housing Region */}
       <div>
-        <label className="block mb-2 font-medium text-gray-900 dark:text-gray-100" htmlFor="housingRegion">
+        <label className="block mb-2 font-medium text-gray-900" htmlFor="housingRegion">
           Where are you looking to live? *
         </label>
         <select
           id="housingRegion"
           name="housingRegion"
-          className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          className="w-full rounded-md border border-gray-300 bg-white p-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           value={formData.housingRegion}
           onChange={handleRegionChange}
           required
         >
-          <option value="" disabled>Select a region</option>
+          <option value="" disabled className="bg-white text-gray-900">Select a region</option>
           {Object.keys(HOUSING_REGIONS).map(region => (
-            <option key={region} value={region}>{region}</option>
+            <option key={region} value={region} className="bg-white text-gray-900">{region}</option>
           ))}
         </select>
       </div>
@@ -77,14 +77,14 @@ export default function LocationPage({ formData, setFormData }: LocationPageProp
         <div>
           {formData.housingRegion === 'Other' ? (
             <div>
-              <label className="block mb-2 font-medium text-gray-900 dark:text-gray-100" htmlFor="otherLocation">
+              <label className="block mb-2 font-medium text-gray-900" htmlFor="otherLocation">
                 Please specify your location: *
               </label>
               <input
                 type="text"
                 id="otherLocation"
                 name="otherLocation"
-                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="w-full rounded-md border border-gray-300 bg-white p-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 placeholder="Enter your specific location"
                 value={formData.housingCities[0] || ''}
                 onChange={(e) => setFormData(prev => ({
@@ -96,7 +96,7 @@ export default function LocationPage({ formData, setFormData }: LocationPageProp
             </div>
           ) : (
             <div>
-              <p className="mb-2 font-medium text-gray-900 dark:text-gray-100">Select specific cities you're interested in: *</p>
+              <p className="mb-2 font-medium text-gray-900">Select specific cities you're interested in: *</p>
               <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
                 {availableCities.map(city => (
                   <div key={city} className="flex items-center">
@@ -105,9 +105,9 @@ export default function LocationPage({ formData, setFormData }: LocationPageProp
                       id={`city-${city}`}
                       checked={formData.housingCities.includes(city)}
                       onChange={() => handleCityToggle(city)}
-                      className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:focus:ring-blue-400"
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
-                    <label htmlFor={`city-${city}`} className="ml-2 text-gray-900 dark:text-gray-100">
+                    <label htmlFor={`city-${city}`} className="ml-2 text-gray-900">
                       {city}
                     </label>
                   </div>
@@ -117,14 +117,14 @@ export default function LocationPage({ formData, setFormData }: LocationPageProp
               {/* Custom city input */}
               {showCustomCityInput ? (
                 <div className="mt-4">
-                  <label className="block mb-2 font-medium text-gray-900 dark:text-gray-100" htmlFor="customCity">
+                  <label className="block mb-2 font-medium text-gray-900" htmlFor="customCity">
                     Add a custom city:
                   </label>
                   <div className="flex gap-2">
                     <input
                       type="text"
                       id="customCity"
-                      className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      className="flex-1 rounded-md border border-gray-300 bg-white p-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                       placeholder="Enter city name"
                       value={customCity}
                       onChange={(e) => setCustomCity(e.target.value)}
@@ -143,7 +143,7 @@ export default function LocationPage({ formData, setFormData }: LocationPageProp
                       setShowCustomCityInput(false);
                       setCustomCity('');
                     }}
-                    className="mt-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                    className="mt-2 text-sm text-gray-500 hover:text-gray-700"
                   >
                     Cancel
                   </button>
@@ -161,12 +161,12 @@ export default function LocationPage({ formData, setFormData }: LocationPageProp
               {/* Display custom cities */}
               {formData.housingCities.filter(city => !availableCities.includes(city)).length > 0 && (
                 <div className="mt-4">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Your custom cities:</p>
+                  <p className="text-sm font-medium text-gray-700">Your custom cities:</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {formData.housingCities.filter(city => !availableCities.includes(city)).map(city => (
                       <div
                         key={city}
-                        className="inline-flex items-center rounded-full bg-blue-100 dark:bg-blue-900 px-3 py-1 text-sm text-blue-800 dark:text-blue-200"
+                        className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-sm text-blue-800"
                       >
                         {city}
                         <button
@@ -187,7 +187,7 @@ export default function LocationPage({ formData, setFormData }: LocationPageProp
       )}
       
       {/* Helper text */}
-      <p className="text-sm text-gray-500 dark:text-gray-400">
+      <p className="text-sm text-gray-500">
         * Required fields
       </p>
     </div>

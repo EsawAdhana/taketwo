@@ -42,20 +42,20 @@ export default function TimingBudgetPage({ formData, setFormData }: TimingBudget
   
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Timing & Budget</h2>
+      <h2 className="text-2xl font-semibold text-gray-900">Timing & Budget</h2>
       
       {/* Internship Dates */}
       <div className="grid gap-6 md:grid-cols-2">
         {/* Start Date */}
         <div>
-          <label className="block mb-2 font-medium text-gray-900 dark:text-gray-100" htmlFor="internshipStartDate">
+          <label className="block mb-2 font-medium text-gray-900" htmlFor="internshipStartDate">
             Internship Start Date *
           </label>
           <input
             type="date"
             id="internshipStartDate"
             name="internshipStartDate"
-            className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="w-full rounded-md border border-gray-300 bg-white p-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             value={formData.internshipStartDate}
             onChange={handleInputChange}
             required
@@ -64,14 +64,14 @@ export default function TimingBudgetPage({ formData, setFormData }: TimingBudget
         
         {/* End Date */}
         <div>
-          <label className="block mb-2 font-medium text-gray-900 dark:text-gray-100" htmlFor="internshipEndDate">
+          <label className="block mb-2 font-medium text-gray-900" htmlFor="internshipEndDate">
             Internship End Date *
           </label>
           <input
             type="date"
             id="internshipEndDate"
             name="internshipEndDate"
-            className={`w-full rounded-md border ${dateError ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} bg-white dark:bg-gray-700 p-2 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+            className={`w-full rounded-md border ${dateError ? 'border-red-500' : 'border-gray-300'} bg-white p-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
             value={formData.internshipEndDate}
             onChange={handleInputChange}
             min={formData.internshipStartDate}
@@ -87,27 +87,27 @@ export default function TimingBudgetPage({ formData, setFormData }: TimingBudget
       <div className="grid gap-6 md:grid-cols-2">
         {/* Number of Roommates */}
         <div>
-          <label className="block mb-2 font-medium text-gray-900 dark:text-gray-100" htmlFor="desiredRoommates">
+          <label className="block mb-2 font-medium text-gray-900" htmlFor="desiredRoommates">
             How many roommates are you looking for? *
           </label>
           <select
             id="desiredRoommates"
             name="desiredRoommates"
-            className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="w-full rounded-md border border-gray-300 bg-white p-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             value={formData.desiredRoommates}
             onChange={handleInputChange}
             required
           >
-            <option value="1">1 roommate</option>
-            <option value="2">2 roommates</option>
-            <option value="3">3 roommates</option>
-            <option value="4+">4+ roommates</option>
+            <option value="1" className="bg-white text-gray-900">1 roommate</option>
+            <option value="2" className="bg-white text-gray-900">2 roommates</option>
+            <option value="3" className="bg-white text-gray-900">3 roommates</option>
+            <option value="4+" className="bg-white text-gray-900">4+ roommates</option>
           </select>
         </div>
         
         {/* Monthly Budget */}
         <div>
-          <label className="block mb-2 font-medium text-gray-900 dark:text-gray-100" htmlFor="budgetRange">
+          <label className="block mb-2 font-medium text-gray-900" htmlFor="budgetRange">
             What is YOUR monthly budget range? *
           </label>
           <div className="space-y-4">
@@ -116,7 +116,7 @@ export default function TimingBudgetPage({ formData, setFormData }: TimingBudget
                 <span>$500</span>
                 <span>$5000+</span>
               </div>
-              <div className="relative h-1 bg-gray-200 rounded-lg">
+              <div className="relative h-2 bg-gray-200 rounded-lg">
                 <div
                   className="absolute h-full bg-blue-500 rounded-lg"
                   style={{
@@ -133,8 +133,8 @@ export default function TimingBudgetPage({ formData, setFormData }: TimingBudget
                   step="100"
                   value={formData.minBudget}
                   onChange={handleInputChange}
-                  className="absolute w-full h-1 appearance-none pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-blue-500 [&::-webkit-slider-thumb]:appearance-none [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-blue-500 [&::-moz-range-thumb]:appearance-none"
-                  style={{ zIndex: 2 }}
+                  className="absolute w-full h-2 appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-blue-500 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:shadow-md [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-blue-500 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:shadow-md"
+                  style={{ zIndex: 3 }}
                 />
                 <input
                   type="range"
@@ -145,8 +145,8 @@ export default function TimingBudgetPage({ formData, setFormData }: TimingBudget
                   step="100"
                   value={formData.maxBudget}
                   onChange={handleInputChange}
-                  className="absolute w-full h-1 appearance-none pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-blue-500 [&::-webkit-slider-thumb]:appearance-none [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-blue-500 [&::-moz-range-thumb]:appearance-none"
-                  style={{ zIndex: 2 }}
+                  className="absolute w-full h-2 appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-blue-500 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:shadow-md [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-blue-500 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:shadow-md"
+                  style={{ zIndex: 4 }}
                 />
               </div>
             </div>
@@ -156,7 +156,7 @@ export default function TimingBudgetPage({ formData, setFormData }: TimingBudget
                 <input
                   type="text"
                   readOnly
-                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 p-2 pl-8 text-gray-900 dark:text-gray-100"
+                  className="w-full rounded-md border border-gray-300 bg-gray-50 p-2 pl-8 text-gray-900"
                   value={formData.minBudget.toLocaleString()}
                 />
               </div>
@@ -166,7 +166,7 @@ export default function TimingBudgetPage({ formData, setFormData }: TimingBudget
                 <input
                   type="text"
                   readOnly
-                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 p-2 pl-8 text-gray-900 dark:text-gray-100"
+                  className="w-full rounded-md border border-gray-300 bg-gray-50 p-2 pl-8 text-gray-900"
                   value={formData.maxBudget.toLocaleString()}
                 />
               </div>
@@ -180,7 +180,7 @@ export default function TimingBudgetPage({ formData, setFormData }: TimingBudget
       </div>
       
       {/* Helper text */}
-      <p className="text-sm text-gray-500 dark:text-gray-400">
+      <p className="text-sm text-gray-500">
         * Required fields
       </p>
     </div>

@@ -222,7 +222,7 @@ export default function DashboardPage() {
   }
   
   return (
-    <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-8 px-4">
+    <main className="min-h-screen bg-white py-8 px-4">
       <div className="max-w-6xl mx-auto">
         <div className="mb-6 flex justify-between items-center">
           <div>
@@ -243,7 +243,7 @@ export default function DashboardPage() {
               <button
                 onClick={handleCreateGroupChat}
                 disabled={isCreatingGroup || selectedUsers.length < 1 || !groupName.trim()}
-                className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg hover:from-indigo-600 hover:to-purple-600 disabled:opacity-50 flex items-center"
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg disabled:opacity-50 flex items-center"
               >
                 <FiUsers className="mr-2" />
                 {isCreatingGroup ? 'Creating...' : 'Create Group Chat'}
@@ -282,7 +282,7 @@ export default function DashboardPage() {
         )}
         
         <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-8">
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
+          <div className="bg-blue-500 px-6 py-4">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold text-white flex items-center">
                 <FiUsers className="mr-2" /> Compatible Roommates
@@ -297,7 +297,7 @@ export default function DashboardPage() {
                         checked={showTestUsers}
                         onChange={() => setShowTestUsers(!showTestUsers)}
                       />
-                      <div className={`w-10 h-5 bg-gray-300 rounded-full shadow-inner ${showTestUsers ? 'bg-indigo-300' : ''}`}></div>
+                      <div className={`w-10 h-5 ${showTestUsers ? 'bg-blue-400' : 'bg-gray-300'} rounded-full shadow-inner`}></div>
                       <div className={`absolute left-0 top-0 w-5 h-5 bg-white rounded-full shadow transform ${showTestUsers ? 'translate-x-5' : ''} transition-transform`}></div>
                     </div>
                     <span className="ml-2 text-white text-sm">Show Test Users</span>

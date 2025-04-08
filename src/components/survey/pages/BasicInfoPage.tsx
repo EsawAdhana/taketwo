@@ -23,18 +23,18 @@ export default function BasicInfoPage({ formData, setFormData }: BasicInfoPagePr
   
   return (
     <div className="space-y-4">
-      <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Basic Information</h2>
+      <h2 className="text-2xl font-semibold text-gray-900">Basic Information</h2>
       
       {/* Privacy Notice */}
-      <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-lg">
-        <p className="text-sm text-blue-800 dark:text-blue-200">
+      <div className="bg-blue-50 p-3 rounded-lg">
+        <p className="text-sm text-blue-800">
           Please note that the information you provide in this survey will be visible to other users.
         </p>
       </div>
       
       {/* First Name */}
       <div>
-        <label className="block mb-2 font-medium text-gray-900 dark:text-gray-100" htmlFor="firstName">
+        <label className="block mb-2 font-medium text-gray-900" htmlFor="firstName">
           What is your first name? *
         </label>
         <input
@@ -42,8 +42,8 @@ export default function BasicInfoPage({ formData, setFormData }: BasicInfoPagePr
           id="firstName"
           name="firstName"
           className={`w-full rounded-md border ${
-            nameError ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-          } bg-white dark:bg-gray-700 p-2 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+            nameError ? 'border-red-500' : 'border-gray-300'
+          } bg-white p-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
           value={formData.firstName}
           onChange={handleInputChange}
           required
@@ -56,13 +56,13 @@ export default function BasicInfoPage({ formData, setFormData }: BasicInfoPagePr
       
       {/* Gender Selection */}
       <div>
-        <label className="block mb-2 font-medium text-gray-900 dark:text-gray-100" htmlFor="gender">
+        <label className="block mb-2 font-medium text-gray-900" htmlFor="gender">
           What is your gender? *
         </label>
         <select
           id="gender"
           name="gender"
-          className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          className="w-full rounded-md border border-gray-300 bg-white p-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           value={formData.gender}
           onChange={handleInputChange}
           required
@@ -83,15 +83,15 @@ export default function BasicInfoPage({ formData, setFormData }: BasicInfoPagePr
           name="roomWithDifferentGender"
           checked={formData.roomWithDifferentGender}
           onChange={handleCheckboxChange}
-          className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:focus:ring-blue-400"
+          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
         />
-        <label htmlFor="roomWithDifferentGender" className="text-gray-900 dark:text-gray-100">
+        <label htmlFor="roomWithDifferentGender" className="text-gray-900">
           I am willing to room with someone of a different gender
         </label>
       </div>
       
       {/* Helper text */}
-      <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
+      <p className="text-sm text-gray-500 mt-4">
         * Required fields
       </p>
     </div>

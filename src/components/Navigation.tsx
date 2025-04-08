@@ -19,11 +19,7 @@ export default function Navigation() {
   // Check if we're in settings
   const isInSettings = pathname === '/settings';
   
-  // Use dark theme for conversation pages
-  const isDarkTheme = isInConversation;
-  const buttonClasses = isDarkTheme 
-    ? "p-2 text-white hover:bg-gray-800 rounded-full transition-colors" 
-    : "p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors";
+  const buttonClasses = "p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors";
   
   // Don't render the global navigation when in conversation page
   if (isInConversation) {

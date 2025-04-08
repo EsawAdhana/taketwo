@@ -26,34 +26,6 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [originalData, setOriginalData] = useState<SurveyFormData | null>(null);
   
-  // Save survey whenever currentPage changes
-  useEffect(() => {
-    if (!loading && formData.currentPage) {
-      saveSurvey(false);
-    }
-  }, [formData.currentPage, loading]);
-  
-  // Add beforeunload event to save data when user leaves the page
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      if (!loading) {
-        // Use a synchronous approach for beforeunload
-        saveSurvey(false);
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      
-      // Also try to save when component unmounts
-      if (!loading) {
-        saveSurvey(false);
-      }
-    };
-  }, [formData, loading]);
-  
   // Fetch existing survey data
   useEffect(() => {
     const fetchSurvey = async () => {
@@ -232,11 +204,11 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
       {/* Completion Modal */}
       {showCompletionModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full mx-4 text-center">
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4 text-center">
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">
               Survey Completed!
             </h3>
-            <p className="text-gray-600 dark:text-gray-300 mb-6">
+            <p className="text-gray-600 mb-6">
               Thank you for completing the survey. You can always update your preferences later in settings.
             </p>
             <button
@@ -284,7 +256,7 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
       </div>
       
       {/* Form Pages */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg">
+      <div className="bg-white rounded-lg p-6 shadow-lg">
         <form onSubmit={(e) => e.preventDefault()}>
           {formData.currentPage === 1 && (
             <BasicInfoPage
