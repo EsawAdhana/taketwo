@@ -53,6 +53,7 @@ export default function DashboardPage() {
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [selectedUserDetails, setSelectedUserDetails] = useState<UserDetailProfile | null>(null);
   const [loadingUserDetails, setLoadingUserDetails] = useState(false);
+  const [showTestUsers, setShowTestUsers] = useState(false);
   
   useEffect(() => {
     const fetchSurveyData = async () => {
@@ -78,7 +79,7 @@ export default function DashboardPage() {
     const fetchRecommendations = async () => {
       setRecommendationsLoading(true);
       try {
-        const response = await fetch('/api/recommendations');
+        const response = await fetch(`/api/recommendations?showTestUsers=${showTestUsers}`);
         const result = await response.json();
         
         if (response.ok && result.matches) {
@@ -94,7 +95,7 @@ export default function DashboardPage() {
     if (session?.user) {
       fetchSurveyData();
     }
-  }, [session]);
+  }, [session, showTestUsers]);
   
   const viewUserDetails = async (match: CompatibilityMatch) => {
     try {
@@ -201,6 +202,23 @@ export default function DashboardPage() {
               <h2 className="text-xl font-semibold text-white flex items-center">
                 <FiUsers className="mr-2" /> Compatible Roommates
               </h2>
+              {surveyData?.isSubmitted && (
+                <div className="flex items-center">
+                  <label className="flex items-center cursor-pointer">
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={showTestUsers}
+                        onChange={() => setShowTestUsers(!showTestUsers)}
+                      />
+                      <div className={`w-10 h-5 bg-gray-300 rounded-full shadow-inner ${showTestUsers ? 'bg-indigo-300' : ''}`}></div>
+                      <div className={`absolute left-0 top-0 w-5 h-5 bg-white rounded-full shadow transform ${showTestUsers ? 'translate-x-5' : ''} transition-transform`}></div>
+                    </div>
+                    <span className="ml-2 text-white text-sm">Show Test Users</span>
+                  </label>
+                </div>
+              )}
             </div>
           </div>
           

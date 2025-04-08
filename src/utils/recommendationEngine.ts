@@ -490,80 +490,67 @@ export async function calculateEnhancedCompatibilityScore(
 export async function getRecommendedMatches(
   userEmail: string,
   testMinCompatibilityScore?: number,
+  filterEmails?: string[],
   useEnhancedScoring: boolean = true
 ): Promise<CompatibilityScore[]> {
-  try {
-    const client = (await import('@/lib/mongodb')).default;
-    const mongodb = await client;
-    const db = mongodb.db('monkeyhouse');
-    
-    // Get the user's survey data
-    let userDoc;
-    
-    // Check if the user is in the regular surveys collection
-    userDoc = await db.collection('surveys').findOne({ userEmail });
-    
-    // If not found, check if it's a test user
-    const isTestUser = !userDoc;
-    if (isTestUser) {
-      userDoc = await db.collection('test_surveys').findOne({ userEmail });
-    }
-    
-    if (!userDoc) throw new Error('User survey not found');
-    
-    // Convert to SurveyFormData
-    const user = documentToSurveyData(userDoc);
-    
-    // Determine collection to search based on where user was found
-    const collectionName = isTestUser ? 'test_surveys' : 'surveys';
-    
-    // Get all submitted surveys except the current user
-    const potentialMatchDocs = await db.collection(collectionName)
-      .find({ 
-        userEmail: { $ne: userEmail },
-        isSubmitted: true
-      })
-      .toArray();
-    
-    // Calculate compatibility scores
-    let compatibilityScores: CompatibilityScore[] = [];
-    
-    // Process each potential match
-    for (const matchDoc of potentialMatchDocs) {
-      const match = documentToSurveyData(matchDoc);
-      
-      let score;
-      if (useEnhancedScoring) {
-        // For test users, pass the adjustable threshold if provided
-        score = await calculateEnhancedCompatibilityScore(
-          user, 
-          match, 
-          testMinCompatibilityScore
-        );
-      } else {
-        score = calculateCompatibilityScore(user, match);
-        
-        // Use provided threshold if any, otherwise default to 50
-        const effectiveThreshold = testMinCompatibilityScore !== undefined
-          ? testMinCompatibilityScore
-          : 50;
-          
-        if (score && score.score < effectiveThreshold) {
-          score = null;
-        }
-      }
-      
-      if (score !== null) {
-        compatibilityScores.push(score);
-      }
-    }
-    
-    // Sort by score (highest first)
-    return compatibilityScores.sort((a, b) => b.score - a.score);
-  } catch (error) {
-    console.error('Error getting recommended matches:', error);
+  // Database connection
+  const client = (await import('@/lib/mongodb')).default;
+  const mongodb = await client;
+  const db = mongodb.db('monkeyhouse');
+
+  // Get the user's survey data
+  const userSurvey = await db.collection('surveys').findOne({ userEmail });
+  
+  if (!userSurvey) {
     return [];
   }
+  
+  // Convert to survey data format
+  const userData = documentToSurveyData(userSurvey);
+  
+  // Get all other users' survey data
+  let otherUsersSurveys;
+  
+  // If specific emails are provided, only get those
+  if (filterEmails && filterEmails.length > 0) {
+    otherUsersSurveys = await db.collection('surveys')
+      .find({ 
+        userEmail: { $in: filterEmails },
+        isSubmitted: true 
+      })
+      .toArray();
+  } else {
+    // Otherwise get all potential matches
+    otherUsersSurveys = await db.collection('surveys')
+      .find({ 
+        userEmail: { $ne: userEmail },
+        isSubmitted: true 
+      })
+      .toArray();
+  }
+
+  // Convert to survey data format
+  const otherUsersData = otherUsersSurveys.map(documentToSurveyData);
+  
+  // Calculate compatibility scores
+  const minCompatibilityScore = testMinCompatibilityScore ?? 50; // Default minimum score
+  const compatibilityScores = await Promise.all(
+    otherUsersData.map(async (otherUserData) => {
+      if(useEnhancedScoring) {
+        return calculateEnhancedCompatibilityScore(userData, otherUserData, minCompatibilityScore);
+      } else {
+        return calculateCompatibilityScore(userData, otherUserData);
+      }
+    })
+  );
+  
+  // Filter out nulls (failed calculations or below threshold)
+  const validScores = compatibilityScores.filter(
+    (score): score is CompatibilityScore => score !== null
+  );
+  
+  // Sort by score (highest first)
+  return validScores.sort((a, b) => b.score - a.score);
 }
 
 /**
