@@ -491,15 +491,22 @@ export async function getRecommendedMatches(
   userEmail: string,
   testMinCompatibilityScore?: number,
   filterEmails?: string[],
-  useEnhancedScoring: boolean = true
+  useEnhancedScoring: boolean = true,
+  showTestUsers: boolean = false
 ): Promise<CompatibilityScore[]> {
   // Database connection
   const client = (await import('@/lib/mongodb')).default;
   const mongodb = await client;
   const db = mongodb.db('monkeyhouse');
 
-  // Get the user's survey data
-  const userSurvey = await db.collection('surveys').findOne({ userEmail });
+  // First try to get the user's survey data from regular surveys
+  let userSurvey = await db.collection('surveys').findOne({ userEmail });
+  const isTestUser = !userSurvey;
+  
+  // If not found in regular surveys, check test_surveys
+  if (!userSurvey) {
+    userSurvey = await db.collection('test_surveys').findOne({ userEmail });
+  }
   
   if (!userSurvey) {
     return [];
@@ -513,20 +520,39 @@ export async function getRecommendedMatches(
   
   // If specific emails are provided, only get those
   if (filterEmails && filterEmails.length > 0) {
-    otherUsersSurveys = await db.collection('surveys')
+    // Check both collections when looking for specific users
+    const regularSurveys = await db.collection('surveys')
       .find({ 
         userEmail: { $in: filterEmails },
         isSubmitted: true 
       })
       .toArray();
+      
+    const testSurveys = showTestUsers ? await db.collection('test_surveys')
+      .find({ 
+        userEmail: { $in: filterEmails },
+        isSubmitted: true 
+      })
+      .toArray() : [];
+      
+    otherUsersSurveys = [...regularSurveys, ...(showTestUsers ? testSurveys : [])];
   } else {
-    // Otherwise get all potential matches
-    otherUsersSurveys = await db.collection('surveys')
+    // Get surveys based on showTestUsers parameter
+    const regularSurveys = await db.collection('surveys')
       .find({ 
         userEmail: { $ne: userEmail },
         isSubmitted: true 
       })
       .toArray();
+      
+    const testSurveys = showTestUsers ? await db.collection('test_surveys')
+      .find({ 
+        userEmail: { $ne: userEmail },
+        isSubmitted: true 
+      })
+      .toArray() : [];
+      
+    otherUsersSurveys = [...regularSurveys, ...(showTestUsers ? testSurveys : [])];
   }
 
   // Convert to survey data format
@@ -561,7 +587,8 @@ export async function getTopMatchesByRegion(
   region: string,
   limit: number = 10,
   useEnhancedScoring: boolean = true,
-  testMinCompatibilityScore?: number
+  testMinCompatibilityScore?: number,
+  showTestUsers: boolean = false
 ): Promise<CompatibilityScore[]> {
   try {
     const client = (await import('@/lib/mongodb')).default;
@@ -575,8 +602,7 @@ export async function getTopMatchesByRegion(
     userDoc = await db.collection('surveys').findOne({ userEmail });
     
     // If not found, check if it's a test user
-    const isTestUser = !userDoc;
-    if (isTestUser) {
+    if (!userDoc) {
       userDoc = await db.collection('test_surveys').findOne({ userEmail });
     }
     
@@ -585,17 +611,28 @@ export async function getTopMatchesByRegion(
     // Convert to SurveyFormData
     const user = documentToSurveyData(userDoc);
     
-    // Determine collection to search based on where user was found
-    const collectionName = isTestUser ? 'test_surveys' : 'surveys';
-    
     // Get all submitted surveys in the specified region except the current user
-    const potentialMatchDocs = await db.collection(collectionName)
+    let potentialMatchDocs = [];
+    
+    // Get regular surveys
+    const regularSurveys = await db.collection('surveys')
       .find({ 
         userEmail: { $ne: userEmail },
         isSubmitted: true,
         housingRegion: region
       })
       .toArray();
+      
+    // Get test surveys if showTestUsers is true
+    const testSurveys = showTestUsers ? await db.collection('test_surveys')
+      .find({ 
+        userEmail: { $ne: userEmail },
+        isSubmitted: true,
+        housingRegion: region
+      })
+      .toArray() : [];
+      
+    potentialMatchDocs = [...regularSurveys, ...(showTestUsers ? testSurveys : [])];
     
     // Calculate compatibility scores
     let compatibilityScores: CompatibilityScore[] = [];
@@ -606,7 +643,6 @@ export async function getTopMatchesByRegion(
       
       let score;
       if (useEnhancedScoring) {
-        // For test users, pass the adjustable threshold if provided
         score = await calculateEnhancedCompatibilityScore(
           user, 
           match, 

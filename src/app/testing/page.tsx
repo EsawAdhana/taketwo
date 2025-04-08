@@ -85,7 +85,8 @@ export default function TestingPage() {
       { item: "Okay with visitors", strength: "neutral" },
       { item: "Okay with visitors staying overnight", strength: "neutral" },
       { item: "LGBTQ+/Ally", strength: "neutral" },
-    ]
+    ],
+    numCopies: 1
   });
   
   useEffect(() => {
@@ -97,14 +98,6 @@ export default function TestingPage() {
     
     // Fetch test users if authenticated
     if (status === 'authenticated') {
-      // Set a timeout to prevent infinite loading
-      const timeoutId = setTimeout(() => {
-        if (loading) {
-          setError('Still loading... Click "Skip Loading" if you want to continue without waiting.');
-          setLoading(false);
-        }
-      }, 10000); // 10 seconds timeout
-      
       fetchDebugInfo()
         .then(() => {
           // After debug info is loaded, fetch test users
@@ -115,9 +108,6 @@ export default function TestingPage() {
           setError(`Initial loading failed: ${error instanceof Error ? error.message : String(error)}`);
           setLoading(false);
         });
-      
-      // Clean up the timeout when the component unmounts or the fetch completes
-      return () => clearTimeout(timeoutId);
     }
   }, [status, router]);
   
@@ -135,9 +125,9 @@ export default function TestingPage() {
       
       const data = await response.json();
       
-      if (data.testUsers) {
-        setTestUsers(data.testUsers);
-        if (data.testUsers.length === 0) {
+      if (data.users) {
+        setTestUsers(data.users);
+        if (data.users.length === 0) {
           setError('No test users found. They might exist in the database but couldn\'t be retrieved.');
         }
       } else {
@@ -669,7 +659,8 @@ export default function TestingPage() {
             { item: "Okay with visitors", strength: "neutral" },
             { item: "Okay with visitors staying overnight", strength: "neutral" },
             { item: "LGBTQ+/Ally", strength: "neutral" },
-          ]
+          ],
+          numCopies: 1
         });
         
         // Refresh the test users list
@@ -999,6 +990,24 @@ export default function TestingPage() {
                   step="100"
                   className="border border-gray-300 rounded p-2 w-full"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Number of Copies
+                </label>
+                <input
+                  type="number"
+                  name="numCopies"
+                  min="1"
+                  max="100"
+                  value={customUserData.numCopies}
+                  onChange={handleCustomUserInputChange}
+                  className="border border-gray-300 rounded p-2 w-full"
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  Create multiple identical users with numbered suffixes
+                </p>
               </div>
             </div>
             

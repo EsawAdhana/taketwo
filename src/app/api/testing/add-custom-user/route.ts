@@ -36,6 +36,15 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Support for creating multiple identical users
+    const numCopies = body.numCopies || 1;
+    if (numCopies > 100) {
+      return NextResponse.json(
+        { error: 'Cannot create more than 100 copies at once' },
+        { status: 400 }
+      );
+    }
     
     // Connect to MongoDB
     const client = await clientPromise;
@@ -62,45 +71,60 @@ export async function POST(req: NextRequest) {
         strength: "neutral" as PreferenceStrength
       }));
     }
+
+    const testUsers = [];
+    for (let i = 0; i < numCopies; i++) {
+      // Generate unique name and email for each copy
+      const nameSuffix = numCopies > 1 ? ` ${i + 1}` : '';
+      const emailPrefix = body.email.split('@')[0];
+      const emailDomain = body.email.split('@')[1];
+      const uniqueEmail = numCopies > 1 ? `${emailPrefix}${i + 1}@${emailDomain}` : body.email;
+
+      // Prepare the user document
+      const testUser = {
+        name: body.name + nameSuffix,
+        userEmail: uniqueEmail,
+        gender: body.gender || 'Male',
+        roomWithDifferentGender: body.roomWithDifferentGender !== undefined 
+          ? body.roomWithDifferentGender 
+          : false,
+        housingRegion: body.housingRegion || 'Bay Area',
+        housingCities: Array.isArray(body.housingCities) 
+          ? body.housingCities 
+          : ['San Francisco'],
+        internshipStartDate: body.internshipStartDate || new Date().toISOString().split('T')[0],
+        internshipEndDate: body.internshipEndDate || (() => {
+          const date = new Date();
+          date.setMonth(date.getMonth() + 3);
+          return date.toISOString().split('T')[0];
+        })(),
+        desiredRoommates: body.desiredRoommates || '2',
+        minBudget: body.minBudget || 1500,
+        maxBudget: body.maxBudget || 2500,
+        preferences,
+        additionalNotes: body.additionalNotes || '',
+        isSubmitted: true,
+        isDraft: false,
+        createdAt: new Date(),
+        isTestUser: true
+      };
+
+      testUsers.push(testUser);
+    }
     
-    // Prepare the user document
-    const testUser = {
-      name: body.name,
-      userEmail: body.email,
-      gender: body.gender || 'Male',
-      roomWithDifferentGender: body.roomWithDifferentGender !== undefined 
-        ? body.roomWithDifferentGender 
-        : false,
-      housingRegion: body.housingRegion || 'Bay Area',
-      housingCities: Array.isArray(body.housingCities) 
-        ? body.housingCities 
-        : ['San Francisco'],
-      internshipStartDate: body.internshipStartDate || new Date().toISOString().split('T')[0],
-      internshipEndDate: body.internshipEndDate || (() => {
-        const date = new Date();
-        date.setMonth(date.getMonth() + 3);
-        return date.toISOString().split('T')[0];
-      })(),
-      desiredRoommates: body.desiredRoommates || '2',
-      minBudget: body.minBudget || 1500,
-      maxBudget: body.maxBudget || 2500,
-      preferences,
-      additionalNotes: body.additionalNotes || '',
-      isSubmitted: true,
-      isDraft: false,
-      createdAt: new Date(),
-      isTestUser: true
-    };
-    
-    // Insert the test user
-    await collection.insertOne(testUser);
+    // Insert the test users
+    if (numCopies > 1) {
+      await collection.insertMany(testUsers);
+    } else {
+      await collection.insertOne(testUsers[0]);
+    }
     
     // Get the count of test users after adding
     const surveyCount = await collection.countDocuments();
     
     return NextResponse.json({
       success: true,
-      message: `Custom test user ${body.name} (${body.email}) added successfully`,
+      message: `Added ${numCopies} test user${numCopies > 1 ? 's' : ''} based on ${body.name}`,
       verificationCounts: {
         surveys: surveyCount,
       }

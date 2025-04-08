@@ -36,18 +36,24 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ testUsers });
     }
     
-    // Get recommended matches
+    // Get recommended matches based on showTestUsers parameter
     let matches;
     if (region) {
       matches = await getTopMatchesByRegion(
         session.user.email,
         region,
-        10 // Limit to top 10 matches in the region
+        10, // Limit to top 10 matches in the region
+        true, // Use enhanced scoring
+        minScoreValue,
+        showTestUsers // Pass showTestUsers parameter
       );
     } else {
       matches = await getRecommendedMatches(
         session.user.email,
-        minScoreValue
+        minScoreValue,
+        undefined, // No filter emails
+        true, // Use enhanced scoring
+        showTestUsers // Pass showTestUsers parameter
       );
     }
 
@@ -56,73 +62,36 @@ export async function GET(req: NextRequest) {
     const mongodb = await client;
     const db = mongodb.db('monkeyhouse');
     
-    // If showTestUsers is enabled, fetch test users as well
-    let testUserMatches = [];
-    if (showTestUsers) {
-      // Find test users who have submitted a survey
-      const testUsers = await db.collection('users')
-        .find({ email: { $regex: "test" } })
-        .project({ email: 1 })
-        .toArray();
-      
-      const testUserEmails = testUsers.map(user => user.email);
-      
-      // Get test users who have submitted a survey
-      const testUserSurveys = await db.collection('surveys')
-        .find({ 
-          userEmail: { $in: testUserEmails },
-          isSubmitted: true
-        })
-        .toArray();
-      
-      // Calculate compatibility scores for each test user
-      const testUserPromises = testUserSurveys.map(async (survey) => {
-        if (survey.userEmail === session.user.email) return null; // Skip self
-        
-        try {
-          const userSurvey = await db.collection('surveys').findOne({ userEmail: session.user.email });
-          if (!userSurvey || !userSurvey.isSubmitted) return null;
-          
-          const userSurveyData = {
-            ...userSurvey,
-            isSubmitted: true
-          };
-          
-          const potentialMatchSurveyData = {
-            ...survey,
-            isSubmitted: true
-          };
-          
-          // Calculate compatibility score using the recommendation engine
-          const compatScore = await getRecommendedMatches(
-            session.user.email,
-            0, // No minimum score for test users
-            [survey.userEmail], // Only get for this specific test user
-            true // Use enhanced scoring
-          );
-          
-          return compatScore.length > 0 ? compatScore[0] : null;
-        } catch (error) {
-          console.error(`Error calculating compatibility for test user ${survey.userEmail}:`, error);
-          return null;
-        }
-      });
-      
-      const testUserResults = await Promise.all(testUserPromises);
-      testUserMatches = testUserResults.filter(Boolean);
-    }
-    
-    // Combine regular matches with test user matches if requested
-    const combinedMatches = showTestUsers 
-      ? [...matches, ...testUserMatches] 
-      : matches;
-    
     // Fetch user profiles for all matches
-    const matchEmails = combinedMatches.map(match => match.userEmail);
-    const userProfiles = await db.collection('users')
-      .find({ email: { $in: matchEmails } })
-      .project({ email: 1, name: 1, image: 1 })
-      .toArray();
+    const matchEmails = matches.map(match => match.userEmail);
+    
+    // Get profiles from both regular users and test users if showTestUsers is true
+    let userProfiles = [];
+    if (showTestUsers) {
+      // Get profiles from both collections
+      const regularProfiles = await db.collection('users')
+        .find({ email: { $in: matchEmails } })
+        .project({ email: 1, name: 1, image: 1 })
+        .toArray();
+        
+      const testProfiles = await db.collection('test_surveys')
+        .find({ userEmail: { $in: matchEmails } })
+        .project({ userEmail: 1, name: 1 })
+        .toArray()
+        .then(profiles => profiles.map(p => ({
+          email: p.userEmail,
+          name: p.name,
+          image: null
+        })));
+        
+      userProfiles = [...regularProfiles, ...testProfiles];
+    } else {
+      // Only get regular user profiles
+      userProfiles = await db.collection('users')
+        .find({ email: { $in: matchEmails } })
+        .project({ email: 1, name: 1, image: 1 })
+        .toArray();
+    }
     
     // Create a map of user emails to profiles for easy lookup
     const userProfileMap = new Map();
@@ -130,10 +99,25 @@ export async function GET(req: NextRequest) {
       userProfileMap.set(profile.email, profile);
     });
     
-    // Fetch survey data for the matches
-    const surveyData = await db.collection('surveys')
-      .find({ userEmail: { $in: matchEmails } })
-      .toArray();
+    // Fetch survey data from appropriate collections based on showTestUsers
+    let surveyData = [];
+    if (showTestUsers) {
+      // Get survey data from both collections
+      const regularSurveys = await db.collection('surveys')
+        .find({ userEmail: { $in: matchEmails } })
+        .toArray();
+        
+      const testSurveys = await db.collection('test_surveys')
+        .find({ userEmail: { $in: matchEmails } })
+        .toArray();
+        
+      surveyData = [...regularSurveys, ...testSurveys];
+    } else {
+      // Only get regular survey data
+      surveyData = await db.collection('surveys')
+        .find({ userEmail: { $in: matchEmails } })
+        .toArray();
+    }
     
     // Create a map of user emails to survey data for easy lookup
     const surveyDataMap = new Map();
@@ -142,7 +126,7 @@ export async function GET(req: NextRequest) {
     });
     
     // Enrich match data with user profiles and survey data
-    const enrichedMatches = combinedMatches.map(match => ({
+    const enrichedMatches = matches.map(match => ({
       ...match,
       userProfile: userProfileMap.get(match.userEmail) || { email: match.userEmail },
       fullProfile: surveyDataMap.get(match.userEmail) || null
