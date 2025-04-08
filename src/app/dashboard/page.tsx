@@ -54,6 +54,9 @@ export default function DashboardPage() {
   const [selectedUserDetails, setSelectedUserDetails] = useState<UserDetailProfile | null>(null);
   const [loadingUserDetails, setLoadingUserDetails] = useState(false);
   const [showTestUsers, setShowTestUsers] = useState(false);
+  const [selectedUsers, setSelectedUsers] = useState<CompatibilityMatch[]>([]);
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [groupName, setGroupName] = useState('');
   
   useEffect(() => {
     const fetchSurveyData = async () => {
@@ -153,6 +156,55 @@ export default function DashboardPage() {
     return namePart.charAt(0).toUpperCase() + namePart.slice(1);
   };
   
+  const toggleUserSelection = (match: CompatibilityMatch) => {
+    if (selectedUsers.some(u => u.userEmail === match.userEmail)) {
+      setSelectedUsers(selectedUsers.filter(u => u.userEmail !== match.userEmail));
+    } else {
+      setSelectedUsers([...selectedUsers, match]);
+    }
+  };
+
+  const handleCreateGroupChat = async () => {
+    if (selectedUsers.length < 2) {
+      alert('Please select at least 2 users for a group chat');
+      return;
+    }
+
+    if (!groupName.trim()) {
+      alert('Please enter a group name');
+      return;
+    }
+
+    setIsCreatingGroup(true);
+    try {
+      const response = await fetch('/api/conversations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          participants: [session?.user?.email, ...selectedUsers.map(u => u.userEmail)],
+          isGroup: true,
+          name: groupName.trim()
+        }),
+      });
+
+      const result = await response.json();
+      if (result.success && result.data) {
+        router.push(`/messages/${result.data._id}`);
+      } else {
+        throw new Error(result.error || 'Failed to create group chat');
+      }
+    } catch (error) {
+      console.error('Error creating group chat:', error);
+      alert('Failed to create group chat. Please try again.');
+    } finally {
+      setIsCreatingGroup(false);
+      setSelectedUsers([]);
+      setGroupName('');
+    }
+  };
+  
   if (status === 'loading' || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -169,11 +221,41 @@ export default function DashboardPage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-8 px-4">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Welcome to Your Dashboard
-          </h1>
-          <p className="text-gray-600 mt-2">Find your perfect roommate match below.</p>
+        <div className="mb-6 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              Welcome to Your Dashboard
+            </h1>
+            <p className="text-gray-600 mt-2">Find your perfect roommate match below.</p>
+          </div>
+          {selectedUsers.length > 0 && (
+            <div className="flex items-center gap-4">
+              <input
+                type="text"
+                placeholder="Enter group name"
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={handleCreateGroupChat}
+                disabled={isCreatingGroup || selectedUsers.length < 2 || !groupName.trim()}
+                className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg hover:from-indigo-600 hover:to-purple-600 disabled:opacity-50 flex items-center"
+              >
+                <FiUsers className="mr-2" />
+                {isCreatingGroup ? 'Creating...' : 'Create Group Chat'}
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedUsers([]);
+                  setGroupName('');
+                }}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
         
         {!surveyData?.isSubmitted && (
@@ -248,7 +330,6 @@ export default function DashboardPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {recommendations.map((match) => {
-                  // Calculate match quality for color coding
                   const matchQuality = match.score >= 85 ? 'high' : match.score >= 70 ? 'medium' : 'standard';
                   const qualityColors = {
                     high: 'from-green-50 to-green-100 border-green-200 hover:from-green-100 hover:to-green-50',
@@ -256,73 +337,98 @@ export default function DashboardPage() {
                     standard: 'from-gray-50 to-gray-100 border-gray-200 hover:from-gray-100 hover:to-gray-50'
                   };
                   
-                  // Get display name (first name only)
                   const displayName = getFirstName(match.userProfile, match.fullProfile);
+                  const isSelected = selectedUsers.some(u => u.userEmail === match.userEmail);
                   
                   return (
                     <div 
                       key={match.userEmail} 
-                      className={`border rounded-xl p-5 bg-gradient-to-br ${qualityColors[matchQuality]} transition-all duration-200 flex flex-col h-full cursor-pointer shadow hover:shadow-md`}
-                      onClick={() => viewUserDetails(match)}
+                      className={`border rounded-xl p-5 bg-gradient-to-br ${qualityColors[matchQuality]} transition-all duration-200 flex flex-col h-full relative ${
+                        isSelected ? 'ring-2 ring-indigo-500' : ''
+                      }`}
                     >
-                      <div className="flex items-center mb-4">
-                        <div className="mr-3">
-                          {match.userProfile.image ? (
-                            <Image 
-                              src={match.userProfile.image} 
-                              alt={displayName} 
-                              width={60} 
-                              height={60} 
-                              className="rounded-full border-2 border-white shadow"
-                            />
-                          ) : (
-                            <div className="w-[60px] h-[60px] bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow">
-                              <span className="text-white text-xl font-semibold">{displayName[0]}</span>
+                      {/* Selection indicator */}
+                      <div 
+                        className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+                          isSelected ? 'bg-indigo-500 text-white' : 'bg-white border-2 border-gray-300'
+                        }`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleUserSelection(match);
+                        }}
+                      >
+                        {isSelected && (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
+
+                      <div 
+                        className="flex-1 cursor-pointer"
+                        onClick={() => viewUserDetails(match)}
+                      >
+                        <div className="flex items-center mb-4">
+                          <div className="mr-3">
+                            {match.userProfile.image ? (
+                              <Image 
+                                src={match.userProfile.image} 
+                                alt={displayName} 
+                                width={60} 
+                                height={60} 
+                                className="rounded-full border-2 border-white shadow"
+                              />
+                            ) : (
+                              <div className="w-[60px] h-[60px] bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow">
+                                <span className="text-white text-xl font-semibold">{displayName[0]}</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="flex-1">
+                            <h3 className="text-lg font-semibold truncate">{displayName}</h3>
+                            <div className={`px-3 py-1 rounded-full font-medium text-sm inline-flex items-center
+                              ${match.score >= 85 ? 'bg-green-100 text-green-800' : 
+                              match.score >= 70 ? 'bg-blue-100 text-blue-800' : 
+                              'bg-gray-100 text-gray-800'}`}
+                            >
+                              <FiStar className="mr-1" /> {Math.round(match.score)}% Match
                             </div>
+                          </div>
+                          {!isSelected && (
+                            <DMButton
+                              userId={match.userEmail}
+                              userName={displayName}
+                              userImage={match.userProfile.image}
+                            />
                           )}
                         </div>
                         
-                        <div className="flex-1">
-                          <h3 className="text-lg font-semibold truncate">{displayName}</h3>
-                          <div className={`px-3 py-1 rounded-full font-medium text-sm inline-flex items-center
-                            ${match.score >= 85 ? 'bg-green-100 text-green-800' : 
-                            match.score >= 70 ? 'bg-blue-100 text-blue-800' : 
-                            'bg-gray-100 text-gray-800'}`}
-                          >
-                            <FiStar className="mr-1" /> {Math.round(match.score)}% Match
+                        <div className="grid grid-cols-2 gap-2 mt-2">
+                          <div className="text-sm">
+                            <div className="text-gray-500 flex items-center">
+                              <FiHome className="mr-1" /> Location
+                            </div>
+                            <div className="font-medium">{Math.round(match.compatibilityDetails.locationScore)}%</div>
                           </div>
-                        </div>
-                        <DMButton
-                          userId={match.userEmail}
-                          userName={displayName}
-                          userImage={match.userProfile.image}
-                        />
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-2 mt-2">
-                        <div className="text-sm">
-                          <div className="text-gray-500 flex items-center">
-                            <FiHome className="mr-1" /> Location
+                          <div className="text-sm">
+                            <div className="text-gray-500 flex items-center">
+                              <FiDollarSign className="mr-1" /> Budget
+                            </div>
+                            <div className="font-medium">{Math.round(match.compatibilityDetails.budgetScore)}%</div>
                           </div>
-                          <div className="font-medium">{Math.round(match.compatibilityDetails.locationScore)}%</div>
-                        </div>
-                        <div className="text-sm">
-                          <div className="text-gray-500 flex items-center">
-                            <FiDollarSign className="mr-1" /> Budget
+                          <div className="text-sm">
+                            <div className="text-gray-500 flex items-center">
+                              <FiCalendar className="mr-1" /> Timing
+                            </div>
+                            <div className="font-medium">{Math.round(match.compatibilityDetails.timingScore)}%</div>
                           </div>
-                          <div className="font-medium">{Math.round(match.compatibilityDetails.budgetScore)}%</div>
-                        </div>
-                        <div className="text-sm">
-                          <div className="text-gray-500 flex items-center">
-                            <FiCalendar className="mr-1" /> Timing
+                          <div className="text-sm">
+                            <div className="text-gray-500 flex items-center">
+                              <FiList className="mr-1" /> Preferences
+                            </div>
+                            <div className="font-medium">{Math.round(match.compatibilityDetails.preferencesScore)}%</div>
                           </div>
-                          <div className="font-medium">{Math.round(match.compatibilityDetails.timingScore)}%</div>
-                        </div>
-                        <div className="text-sm">
-                          <div className="text-gray-500 flex items-center">
-                            <FiList className="mr-1" /> Preferences
-                          </div>
-                          <div className="font-medium">{Math.round(match.compatibilityDetails.preferencesScore)}%</div>
                         </div>
                       </div>
                     </div>
