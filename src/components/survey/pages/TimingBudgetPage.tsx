@@ -107,40 +107,69 @@ export default function TimingBudgetPage({ formData, setFormData }: TimingBudget
         
         {/* Monthly Budget */}
         <div>
-          <label className="block mb-2 font-medium text-gray-900 dark:text-gray-100" htmlFor="minBudget">
+          <label className="block mb-2 font-medium text-gray-900 dark:text-gray-100" htmlFor="budgetRange">
             What is YOUR monthly budget range? *
           </label>
-          <div className="flex items-center space-x-2">
-            <div className="relative flex-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-              <input
-                type="number"
-                id="minBudget"
-                name="minBudget"
-                min="0"
-                step="100"
-                placeholder="Min"
-                className={`w-full rounded-md border ${budgetError ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} bg-white dark:bg-gray-700 p-2 pl-8 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
-                value={formData.minBudget}
-                onChange={handleInputChange}
-                required
-              />
+          <div className="space-y-4">
+            <div className="relative pt-6">
+              <div className="absolute -top-1 left-0 right-0 flex justify-between text-xs text-gray-500">
+                <span>$500</span>
+                <span>$5000+</span>
+              </div>
+              <div className="relative h-1 bg-gray-200 rounded-lg">
+                <div
+                  className="absolute h-full bg-blue-500 rounded-lg"
+                  style={{
+                    left: `${((formData.minBudget - 500) / (5000 - 500)) * 100}%`,
+                    right: `${100 - ((formData.maxBudget - 500) / (5000 - 500)) * 100}%`
+                  }}
+                />
+                <input
+                  type="range"
+                  id="minBudget"
+                  name="minBudget"
+                  min="500"
+                  max="5000"
+                  step="100"
+                  value={formData.minBudget}
+                  onChange={handleInputChange}
+                  className="absolute w-full h-1 appearance-none pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-blue-500 [&::-webkit-slider-thumb]:appearance-none [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-blue-500 [&::-moz-range-thumb]:appearance-none"
+                  style={{ zIndex: 2 }}
+                />
+                <input
+                  type="range"
+                  id="maxBudget"
+                  name="maxBudget"
+                  min="500"
+                  max="5000"
+                  step="100"
+                  value={formData.maxBudget}
+                  onChange={handleInputChange}
+                  className="absolute w-full h-1 appearance-none pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-blue-500 [&::-webkit-slider-thumb]:appearance-none [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-blue-500 [&::-moz-range-thumb]:appearance-none"
+                  style={{ zIndex: 2 }}
+                />
+              </div>
             </div>
-            <span className="text-gray-500">to</span>
-            <div className="relative flex-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-              <input
-                type="number"
-                id="maxBudget"
-                name="maxBudget"
-                min={formData.minBudget}
-                step="100"
-                placeholder="Max"
-                className={`w-full rounded-md border ${budgetError ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} bg-white dark:bg-gray-700 p-2 pl-8 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
-                value={formData.maxBudget}
-                onChange={handleInputChange}
-                required
-              />
+            <div className="flex justify-between items-center">
+              <div className="relative flex-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                <input
+                  type="text"
+                  readOnly
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 p-2 pl-8 text-gray-900 dark:text-gray-100"
+                  value={formData.minBudget.toLocaleString()}
+                />
+              </div>
+              <span className="mx-4 text-gray-500">to</span>
+              <div className="relative flex-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                <input
+                  type="text"
+                  readOnly
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 p-2 pl-8 text-gray-900 dark:text-gray-100"
+                  value={formData.maxBudget.toLocaleString()}
+                />
+              </div>
             </div>
           </div>
           {budgetError && (

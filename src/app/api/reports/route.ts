@@ -73,17 +73,17 @@ export async function POST(req: NextRequest) {
       fromReport: true
     });
     
-    // Check total number of unique reporters for this user
-    const uniqueReporters = await db.collection('reports')
-      .distinct('reporterEmail', { reportedUserEmail });
+    // Count total reports instead of unique reporters for testing
+    const totalReports = await db.collection('reports')
+      .countDocuments({ reportedUserEmail });
     
-    // If user has 3 or more unique reporters, permanently ban them
-    if (uniqueReporters.length >= 3) {
+    // If user has 3 or more reports (from anyone), permanently ban them
+    if (totalReports >= 3) {
       // Add to banned users collection
       await db.collection('banned_users').insertOne({
         userEmail: reportedUserEmail,
-        reason: 'Received 3 or more reports from different users',
-        reportCount: uniqueReporters.length,
+        reason: 'Received 3 or more reports',
+        reportCount: totalReports,
         bannedAt: new Date(),
         permanent: true
       });

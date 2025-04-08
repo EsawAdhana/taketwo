@@ -13,9 +13,10 @@ const handler = NextAuth({
   ],
   pages: {
     signIn: '/auth/signin',
+    error: '/auth/error',
   },
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user }) {
       try {
         const client = await clientPromise;
         const db = client.db('monkeyhouse');
@@ -27,7 +28,8 @@ const handler = NextAuth({
         });
 
         if (bannedUser) {
-          throw new Error('Your account has been permanently banned due to multiple reports.');
+          console.error('Banned user attempted to sign in:', user.email);
+          return false; // This will redirect to error page
         }
 
         await connectDB();
@@ -75,7 +77,7 @@ const handler = NextAuth({
     },
     async jwt({ token, user, account }) {
       return token;
-    },
+    }
   },
 });
 
