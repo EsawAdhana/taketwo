@@ -24,6 +24,7 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [originalData, setOriginalData] = useState<SurveyFormData | null>(null);
   
   // Save survey whenever currentPage changes
   useEffect(() => {
@@ -31,6 +32,27 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
       saveSurvey(false);
     }
   }, [formData.currentPage, loading]);
+  
+  // Add beforeunload event to save data when user leaves the page
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (!loading) {
+        // Use a synchronous approach for beforeunload
+        saveSurvey(false);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      
+      // Also try to save when component unmounts
+      if (!loading) {
+        saveSurvey(false);
+      }
+    };
+  }, [formData, loading]);
   
   // Fetch existing survey data
   useEffect(() => {
@@ -52,14 +74,18 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
             existingPreferences.get(initialPref.item) || initialPref
           );
           
-          setFormData({
+          const surveyData = {
             ...INITIAL_FORM_DATA,
             ...result.data,
             preferences: mergedPreferences,
             // Keep the saved page unless the survey was submitted
             currentPage: result.data.isSubmitted ? 1 : (result.data.currentPage || 1),
-            isSubmitted: isEditing ? result.data.isSubmitted : false
-          });
+            // Preserve isSubmitted status even during editing
+            isSubmitted: isEditing ? result.data.isSubmitted : (result.data.isSubmitted || false)
+          };
+          
+          setFormData(surveyData);
+          setOriginalData(surveyData);
         }
       } catch (error) {
         console.error('Error fetching survey data:', error);
@@ -72,10 +98,19 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
   }, [session, isEditing]);
   
   // Save form data
-  const saveSurvey = async (isSubmitted = false) => {
+  const saveSurvey = async (finalSubmit = false) => {
     setSaving(true);
     
     try {
+      // Always preserve the isSubmitted status if it was previously true
+      const isAlreadySubmitted = formData.isSubmitted || (originalData?.isSubmitted ?? false);
+      const willBeSubmitted = finalSubmit || isAlreadySubmitted;
+      
+      // Update local state first for immediate feedback
+      if (finalSubmit && !formData.isSubmitted) {
+        setFormData(prev => ({ ...prev, isSubmitted: true }));
+      }
+      
       // Send the full formData including currentPage
       const response = await fetch('/api/survey', {
         method: 'POST',
@@ -84,16 +119,38 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
         },
         body: JSON.stringify({
           ...formData,
-          isDraft: !isSubmitted,
-          isSubmitted
+          isDraft: !willBeSubmitted,
+          isSubmitted: willBeSubmitted
         }),
       });
       
       const result = await response.json();
       
       if (response.ok) {
-        if (isSubmitted) {
-          setFormData(prev => ({ ...prev, isSubmitted: true }));
+        // Double-check that isSubmitted is set properly
+        if (finalSubmit) {
+          // Make another request to check the status
+          try {
+            const checkResponse = await fetch('/api/survey');
+            const checkResult = await checkResponse.json();
+            
+            if (checkResult.data && !checkResult.data.isSubmitted) {
+              // If somehow isSubmitted is still false, try to save again
+              await fetch('/api/survey', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  ...formData,
+                  isDraft: false,
+                  isSubmitted: true
+                }),
+              });
+            }
+          } catch (error) {
+            console.error('Error checking submission status:', error);
+          }
         }
         return true;
       } else {
@@ -155,8 +212,15 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
     setShowCompletionModal(false);
     if (onSubmitSuccess) {
       onSubmitSuccess();
+    } else {
+      // Fallback if onSubmitSuccess is not provided
+      router.push('/dashboard');
     }
-    router.push('/dashboard');
+    
+    // Force navigation after a short delay as a backup
+    setTimeout(() => {
+      window.location.href = '/dashboard';
+    }, 300);
   };
   
   if (loading) {

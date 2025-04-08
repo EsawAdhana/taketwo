@@ -47,6 +47,7 @@ export default function ConversationPage({
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessageTimestampRef = useRef<string | null>(null);
@@ -208,6 +209,36 @@ export default function ConversationPage({
     }
   };
 
+  // Delete the current conversation
+  const deleteConversation = async () => {
+    if (!window.confirm('Are you sure you want to delete this entire conversation? This action cannot be undone.')) {
+      return;
+    }
+    
+    setIsDeleting(true);
+    
+    try {
+      const response = await fetch(`/api/conversations/${params.conversationId}`, {
+        method: 'DELETE',
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        // Redirect to the messages page after successful deletion
+        router.push('/messages');
+      } else {
+        console.error('Error deleting conversation:', result.error);
+        alert('Failed to delete conversation. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      alert('Failed to delete conversation. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // Initialize the conversation
   useEffect(() => {
     if (!session) {
@@ -268,36 +299,94 @@ export default function ConversationPage({
 
   return (
     <div className="flex flex-col h-screen bg-gray-900">
-      {/* Header */}
-      <div className="flex items-center p-4 border-b border-gray-800">
+      {/* Conversation header */}
+      <div className="bg-gray-800 border-b border-gray-700 p-4 flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          {conversation.isGroup ? (
-            <div className="relative w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
-              <span className="text-lg font-semibold text-white">
-                {conversation.name.charAt(0).toUpperCase()}
-              </span>
-            </div>
-          ) : (
-            <div className="relative w-10 h-10">
-              <Image
-                src={conversation.otherParticipants[0]?.image || '/default-avatar.png'}
-                alt={conversation.otherParticipants[0]?.name || 'User'}
-                fill
-                className="rounded-full object-cover"
-              />
-            </div>
+          {conversation && (
+            <>
+              <button 
+                onClick={() => router.push('/messages')}
+                className="p-1 rounded-full hover:bg-gray-700"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <div className="flex items-center space-x-2">
+                <div className="relative w-10 h-10">
+                  <Image
+                    src={conversation.otherParticipants[0]?.image || '/default-avatar.png'}
+                    alt={conversation.otherParticipants[0]?.name || 'Unknown'}
+                    fill
+                    className="rounded-full object-cover"
+                  />
+                </div>
+                <div>
+                  <h1 className="font-semibold text-white">
+                    {conversation.isGroup
+                      ? conversation.name
+                      : conversation.otherParticipants[0]?.name || 'Unknown User'}
+                  </h1>
+                  {conversation.isGroup && (
+                    <p className="text-sm text-gray-400">
+                      {conversation.participants.length} participants
+                    </p>
+                  )}
+                </div>
+              </div>
+            </>
           )}
-          <div>
-            <h2 className="text-lg font-semibold text-white">
-              {conversation.isGroup
-                ? conversation.name
-                : conversation.otherParticipants[0]?.name || 'User'}
-            </h2>
-            <p className="text-sm text-gray-400">
-              {conversation.isGroup
-                ? `${conversation.participants.length} participants`
-                : 'Online'}
-            </p>
+        </div>
+        
+        {/* Navigation buttons */}
+        <div className="flex items-center space-x-2">
+          {/* Home button */}
+          <button 
+            onClick={() => router.push('/dashboard')}
+            className="p-2 rounded-full hover:bg-gray-700"
+            aria-label="Dashboard"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+          </button>
+          
+          {/* Settings button */}
+          <button 
+            onClick={() => router.push('/settings')}
+            className="p-2 rounded-full hover:bg-gray-700"
+            aria-label="Settings"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+          
+          {/* Delete conversation button (in dropdown) */}
+          <div className="relative group">
+            <button
+              className="p-2 rounded-full hover:bg-gray-700"
+              aria-label="More options"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+              </svg>
+            </button>
+            <div className="absolute right-0 mt-1 w-48 bg-gray-700 rounded-md shadow-lg z-10 hidden group-hover:block">
+              <div className="py-1">
+                <button
+                  onClick={deleteConversation}
+                  disabled={isDeleting}
+                  className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-600 flex items-center"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  {isDeleting ? 'Deleting...' : 'Delete conversation'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -17,22 +17,20 @@ export async function POST(req: NextRequest) {
   }
   
   try {
-    console.log("Starting add-custom-user process");
     const session = await getServerSession();
     
     // Only allow authenticated users to access this endpoint
     if (!session?.user?.email) {
-      console.log("Unauthorized attempt to add custom test user");
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
     
-    // Parse request body
-    const userData = await req.json();
+    // Parse request body for custom user data
+    const body = await req.json();
     
-    if (!userData || !userData.email || !userData.name) {
+    if (!body || !body.email || !body.name) {
       return NextResponse.json(
         { error: 'Invalid user data - name and email are required' },
         { status: 400 }
@@ -45,18 +43,18 @@ export async function POST(req: NextRequest) {
     const collection = db.collection("test_surveys");
     
     // Check if a test user with this email already exists
-    const existingUser = await collection.findOne({ userEmail: userData.email });
+    const existingUser = await collection.findOne({ userEmail: body.email });
     if (existingUser) {
       return NextResponse.json(
-        { error: `A test user with email ${userData.email} already exists` },
+        { error: `A test user with email ${body.email} already exists` },
         { status: 400 }
       );
     }
     
     // Process preferences
     let preferences: Preference[];
-    if (userData.preferences && Array.isArray(userData.preferences)) {
-      preferences = userData.preferences;
+    if (body.preferences && Array.isArray(body.preferences)) {
+      preferences = body.preferences;
     } else {
       // Default to all neutral preferences
       preferences = NON_NEGOTIABLES.map(item => ({
@@ -67,27 +65,27 @@ export async function POST(req: NextRequest) {
     
     // Prepare the user document
     const testUser = {
-      name: userData.name,
-      userEmail: userData.email,
-      gender: userData.gender || 'Male',
-      roomWithDifferentGender: userData.roomWithDifferentGender !== undefined 
-        ? userData.roomWithDifferentGender 
+      name: body.name,
+      userEmail: body.email,
+      gender: body.gender || 'Male',
+      roomWithDifferentGender: body.roomWithDifferentGender !== undefined 
+        ? body.roomWithDifferentGender 
         : false,
-      housingRegion: userData.housingRegion || 'Bay Area',
-      housingCities: Array.isArray(userData.housingCities) 
-        ? userData.housingCities 
+      housingRegion: body.housingRegion || 'Bay Area',
+      housingCities: Array.isArray(body.housingCities) 
+        ? body.housingCities 
         : ['San Francisco'],
-      internshipStartDate: userData.internshipStartDate || new Date().toISOString().split('T')[0],
-      internshipEndDate: userData.internshipEndDate || (() => {
+      internshipStartDate: body.internshipStartDate || new Date().toISOString().split('T')[0],
+      internshipEndDate: body.internshipEndDate || (() => {
         const date = new Date();
         date.setMonth(date.getMonth() + 3);
         return date.toISOString().split('T')[0];
       })(),
-      desiredRoommates: userData.desiredRoommates || '2',
-      minBudget: userData.minBudget || 1500,
-      maxBudget: userData.maxBudget || 2500,
+      desiredRoommates: body.desiredRoommates || '2',
+      minBudget: body.minBudget || 1500,
+      maxBudget: body.maxBudget || 2500,
       preferences,
-      additionalNotes: userData.additionalNotes || '',
+      additionalNotes: body.additionalNotes || '',
       isSubmitted: true,
       isDraft: false,
       createdAt: new Date(),
@@ -102,16 +100,18 @@ export async function POST(req: NextRequest) {
     
     return NextResponse.json({
       success: true,
-      message: `Custom test user ${userData.name} (${userData.email}) added successfully`,
+      message: `Custom test user ${body.name} (${body.email}) added successfully`,
       verificationCounts: {
         surveys: surveyCount,
       }
     });
     
   } catch (error) {
-    console.error("Error adding custom test user:", error);
     return NextResponse.json(
-      { error: `Failed to add custom test user: ${error instanceof Error ? error.message : String(error)}` },
+      { 
+        error: 'Failed to add custom test user',
+        message: error instanceof Error ? error.message : String(error)
+      },
       { status: 500 }
     );
   }

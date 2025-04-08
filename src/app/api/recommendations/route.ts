@@ -32,7 +32,6 @@ export async function GET(req: NextRequest) {
         .project({ email: 1, name: 1 })
         .toArray();
       
-      console.log(`Found ${testUsers.length} test users`);
       return NextResponse.json({ testUsers });
     }
     

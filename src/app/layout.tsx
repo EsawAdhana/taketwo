@@ -2,7 +2,7 @@ import '@/app/globals.css';
 import { Inter } from 'next/font/google';
 import { getServerSession } from 'next-auth';
 import SessionProvider from '@/components/SessionProvider';
-import SettingsButton from '@/components/SettingsButton';
+import Navigation from '@/components/Navigation';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -23,11 +23,7 @@ export default async function RootLayout({
       <body className={inter.className}>
         <SessionProvider session={session}>
           <div className="relative min-h-screen">
-            {session && (
-              <div className="absolute top-4 right-4 z-50">
-                <SettingsButton />
-              </div>
-            )}
+            {session && <Navigation />}
             {children}
           </div>
         </SessionProvider>

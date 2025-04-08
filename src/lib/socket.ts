@@ -20,16 +20,12 @@ export const initSocket = (res: NextApiResponseWithSocket) => {
     res.socket.server.io = io;
 
     io.on('connection', (socket) => {
-      console.log('Client connected');
-
       socket.on('join-conversation', (conversationId: string) => {
         socket.join(conversationId);
-        console.log(`Joined conversation: ${conversationId}`);
       });
 
       socket.on('leave-conversation', (conversationId: string) => {
         socket.leave(conversationId);
-        console.log(`Left conversation: ${conversationId}`);
       });
 
       socket.on('send-message', async (messageData) => {
@@ -58,7 +54,6 @@ export const initSocket = (res: NextApiResponseWithSocket) => {
       });
 
       socket.on('disconnect', () => {
-        console.log('Client disconnected');
       });
     });
   }

@@ -16,7 +16,10 @@ export default function DMButton({ userId, userName, userImage }: DMButtonProps)
   const { data: session } = useSession();
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleDM = async () => {
+  const handleDM = async (e: React.MouseEvent) => {
+    // Stop event propagation to prevent parent card onClick from firing
+    e.stopPropagation();
+    
     if (!session?.user) {
       // Handle not logged in state
       return;
@@ -27,11 +30,6 @@ export default function DMButton({ userId, userName, userImage }: DMButtonProps)
       // Use emails for participants to avoid ID issues
       // The API will handle finding/converting these to proper IDs
       const participants = [session.user.email, userId];
-      
-      console.log('Creating conversation with data:', {
-        participants,
-        isGroup: false
-      });
       
       const response = await fetch('/api/conversations', {
         method: 'POST',
@@ -46,7 +44,6 @@ export default function DMButton({ userId, userName, userImage }: DMButtonProps)
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Server error details:', errorData);
         throw new Error(`Failed to create conversation: ${errorData.error || 'Unknown error'}`);
       }
 
@@ -57,7 +54,6 @@ export default function DMButton({ userId, userName, userImage }: DMButtonProps)
         throw new Error('Failed to create conversation: No data returned');
       }
     } catch (error) {
-      console.error('Error creating conversation:', error);
       // Handle error state
     } finally {
       setIsLoading(false);

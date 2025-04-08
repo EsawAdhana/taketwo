@@ -3,12 +3,34 @@
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MultiPageSurvey from '@/components/survey/MultiPageSurvey';
+import { useEffect } from 'react';
 
 export default function SurveyPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const isEditing = searchParams.get('edit') === 'true';
+  
+  // Function to handle successful survey submission
+  const handleSurveySuccess = () => {
+    console.log('Survey submitted successfully, navigating to dashboard...');
+    
+    // Use multiple navigation methods to ensure redirection works
+    try {
+      router.push('/dashboard');
+    } catch (e) {
+      console.error('Router push failed:', e);
+    }
+    
+    // Fallback navigation methods
+    setTimeout(() => {
+      try {
+        window.location.href = '/dashboard';
+      } catch (e) {
+        console.error('Location redirect failed:', e);
+      }
+    }, 300);
+  };
   
   if (status === 'loading') {
     return (
@@ -30,7 +52,7 @@ export default function SurveyPage() {
           {isEditing ? 'Edit Your Preferences' : 'Internship Housing Survey'}
         </h1>
         <MultiPageSurvey 
-          onSubmitSuccess={() => router.push('/dashboard')} 
+          onSubmitSuccess={handleSurveySuccess} 
           isEditing={isEditing}
         />
       </div>

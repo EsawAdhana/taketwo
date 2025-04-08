@@ -10,8 +10,6 @@ export async function GET() {
   }
   
   try {
-    console.log("Starting check-connection process");
-    
     // Simple connection test - avoid complex queries
     const client = await clientPromise;
     const isConnected = !!client && client.topology?.isConnected();

@@ -165,18 +165,35 @@ export default function DashboardPage() {
     return null;
   }
   
-  if (!surveyData?.isSubmitted) {
-    router.push('/survey');
-    return null;
-  }
-  
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-8 px-4">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-3">
-          Welcome to Your Dashboard
-        </h1>
-        <p className="text-gray-600 mb-8">Find your perfect roommate match below.</p>
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900">
+            Welcome to Your Dashboard
+          </h1>
+          <p className="text-gray-600 mt-2">Find your perfect roommate match below.</p>
+        </div>
+        
+        {!surveyData?.isSubmitted && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-8">
+            <div className="flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+              <p className="text-amber-700">
+                <span className="font-medium">Note:</span> You haven't completed your housing preferences survey yet. 
+                To see personalized roommate recommendations, please 
+                <button 
+                  onClick={() => router.push('/survey')} 
+                  className="text-blue-600 underline font-medium ml-1"
+                >
+                  complete your survey
+                </button>.
+              </p>
+            </div>
+          </div>
+        )}
         
         <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-8">
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
@@ -184,21 +201,23 @@ export default function DashboardPage() {
               <h2 className="text-xl font-semibold text-white flex items-center">
                 <FiUsers className="mr-2" /> Compatible Roommates
               </h2>
-              <button 
-                onClick={() => router.push('/survey?edit=true')}
-                className="bg-white text-blue-600 px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-50 transition-colors"
-              >
-                Edit Preferences
-              </button>
             </div>
           </div>
           
           <div className="p-6">
-            <p className="text-gray-600 mb-6">
-              Below are potential roommates that match your preferences. Click on a card to view more details.
-            </p>
-            
-            {recommendationsLoading ? (
+            {!surveyData?.isSubmitted ? (
+              <div className="text-center py-10">
+                <p className="text-gray-600 mb-4">
+                  Complete your housing preferences survey to see your personalized roommate matches.
+                </p>
+                <button
+                  onClick={() => router.push('/survey')}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Take Survey
+                </button>
+              </div>
+            ) : recommendationsLoading ? (
               <div className="text-center py-10">
                 <div className="animate-pulse text-gray-600">Loading recommendations...</div>
               </div>
@@ -329,7 +348,7 @@ function UserDetailsModal({
   
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-10">
-      <div className="bg-white p-0 rounded-xl max-w-3xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+      <div className="bg-white p-0 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
         <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 p-5 text-white">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-bold flex items-center">
@@ -478,7 +497,9 @@ function UserDetailsModal({
                     <FiStar className="mr-2" /> Additional Notes
                   </h3>
                   <div className="bg-gray-50 p-5 rounded-xl shadow-sm border border-gray-100">
-                    <p className="italic">{match.fullProfile.additionalNotes}</p>
+                    <div className="max-h-[200px] overflow-y-auto pr-2">
+                      <p className="italic whitespace-pre-wrap break-words">{match.fullProfile.additionalNotes}</p>
+                    </div>
                   </div>
                 </div>
               )}

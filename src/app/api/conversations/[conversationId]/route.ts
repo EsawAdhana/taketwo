@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { connectDB } from '@/lib/mongodb';
 import Conversation from '@/models/Conversation';
 import User from '@/models/User';
+import Message from '@/models/Message';
 
 export async function GET(
   req: Request,
@@ -64,6 +65,59 @@ export async function GET(
     return NextResponse.json({ success: true, data: transformedConversation });
   } catch (error) {
     console.error('Error fetching conversation:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: { conversationId: string } }
+) {
+  try {
+    const session = await getServerSession();
+    
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await connectDB();
+
+    const conversationId = params.conversationId;
+
+    // Get current user by email since session.user.id might be undefined
+    const currentUser = await User.findOne({ email: session.user.email });
+    
+    if (!currentUser) {
+      return NextResponse.json({ error: 'Current user not found' }, { status: 404 });
+    }
+    
+    const userId = currentUser._id.toString();
+
+    // Find the conversation and verify the user is a participant
+    const conversation = await Conversation.findById(conversationId);
+
+    if (!conversation) {
+      return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+    }
+
+    // Verify user is part of the conversation
+    const isParticipant = conversation.participants.some(
+      (p: any) => p.toString() === userId
+    );
+    
+    if (!isParticipant) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Delete all associated messages
+    await Message.deleteMany({ conversationId });
+    
+    // Delete the conversation
+    await Conversation.findByIdAndDelete(conversationId);
+
+    return NextResponse.json({ success: true, message: 'Conversation deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting conversation:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 } 

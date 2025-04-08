@@ -20,38 +20,30 @@ export async function GET() {
     const client = await clientPromise;
     const db = client.db('monkeyhouse');
     
-    // Check if MongoDB connection is working
+    // Get database connection status
     const dbStatus = {
-      connected: !!client && !!db,
-      dbName: db ? db.databaseName : null
+      connected: !!db,
+      dbName: db?.databaseName || null
     };
     
-    console.log('Database connection status:', dbStatus);
-    
-    // Get all collections for diagnostics
+    // Get all collections
     const collections = await db.listCollections().toArray();
     const collectionNames = collections.map(c => c.name);
     
-    console.log('Available collections:', collectionNames);
-    
-    // Count test surveys in test_surveys collection, but first check if it exists
-    let testSurveys = 0;
-    if (collectionNames.includes('test_surveys')) {
-      testSurveys = await db.collection('test_surveys').countDocuments();
-    }
-    
-    console.log(`Found ${testSurveys} test surveys in test_surveys collection`);
+    // Get test survey count
+    const testSurveys = await db.collection('test_surveys').countDocuments();
     
     return NextResponse.json({
       success: true,
-      dbStatus,
-      collections: collectionNames,
-      surveyCount: testSurveys
+      debug: {
+        dbConnection: dbStatus,
+        collections: collectionNames,
+        testSurveys
+      }
     });
   } catch (error) {
-    console.error('Error fetching debug data:', error);
-    return NextResponse.json({ 
-      error: 'Failed to fetch debug data',
+    return NextResponse.json({
+      error: 'Debug check failed',
       message: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }

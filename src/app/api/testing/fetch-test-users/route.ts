@@ -6,46 +6,53 @@ import clientPromise from '@/lib/mongodb';
 const ENABLE_TEST_ENDPOINT = process.env.NODE_ENV !== 'production';
 
 export async function GET() {
+  // Check if test endpoint is enabled
   if (!ENABLE_TEST_ENDPOINT) {
-    return NextResponse.json({ error: 'Test endpoints disabled in production' }, { status: 403 });
+    return NextResponse.json(
+      { error: 'Test endpoints are disabled in production' },
+      { status: 403 }
+    );
   }
   
   try {
-    console.log("Starting fetch-test-users process");
     const session = await getServerSession();
     
+    // Only allow authenticated users to access this endpoint
     if (!session?.user?.email) {
-      console.log("Unauthorized attempt to fetch test users");
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
     }
     
     const client = await clientPromise;
     const db = client.db('monkeyhouse');
-    console.log("Connected to database:", db.databaseName);
     
-    // Get test users from test_surveys collection
-    const testUsers = await db.collection('test_surveys')
-      .find({})
-      .project({ _id: 0, name: 1, email: 1, userEmail: 1 })
-      .toArray();
+    // Get all test users
+    const users = await db.collection('test_surveys').find({}).toArray();
     
-    // Map the data to ensure compatibility with the UI
-    const formattedUsers = testUsers.map(user => ({
-      name: user.name,
-      email: user.userEmail || user.email
+    // Format the users for the frontend
+    const formattedUsers = users.map(user => ({
+      name: user.name || 'Unknown',
+      email: user.userEmail,
+      region: user.housingRegion,
+      gender: user.gender,
+      city: Array.isArray(user.housingCities) && user.housingCities.length > 0 
+        ? user.housingCities[0] 
+        : 'Unknown'
     }));
-    
-    console.log(`Found ${formattedUsers.length} test users in test_surveys collection`);
     
     return NextResponse.json({
       success: true,
-      testUsers: formattedUsers
+      users: formattedUsers
     });
   } catch (error) {
-    console.error('Error fetching test users:', error);
-    return NextResponse.json({
-      error: 'Failed to fetch test users',
-      message: error instanceof Error ? error.message : String(error)
-    }, { status: 500 });
+    return NextResponse.json(
+      { 
+        error: 'Failed to fetch test users',
+        message: error instanceof Error ? error.message : String(error)
+      },
+      { status: 500 }
+    );
   }
 } 

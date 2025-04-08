@@ -297,12 +297,10 @@ export async function POST(req: NextRequest) {
   }
   
   try {
-    console.log("Starting add-test-users process");
     const session = await getServerSession();
     
     // Only allow authenticated users to access this endpoint
     if (!session?.user?.email) {
-      console.log("Unauthorized attempt to add test users");
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -318,23 +316,19 @@ export async function POST(req: NextRequest) {
       }
     } catch (e) {
       // If request body parsing fails, use default
-      console.log("Failed to parse request body, using default numUsers:", numUsers);
     }
     
     const client = await clientPromise;
     const db = client.db('monkeyhouse');
-    console.log("Connected to database:", db.databaseName);
     
     // Check if test_surveys collection exists, create it if not
     const collections = await db.listCollections({ name: 'test_surveys' }).toArray();
     if (collections.length === 0) {
-      console.log("Creating test_surveys collection");
       await db.createCollection('test_surveys');
     }
     
     // Get the count of existing test users to generate unique identifiers
     const existingCount = await db.collection('test_surveys').countDocuments();
-    console.log(`Found ${existingCount} existing test users`);
     
     // Generate test users with indices that continue from existing users
     const TEST_USERS = [];
@@ -345,7 +339,6 @@ export async function POST(req: NextRequest) {
     
     // Get new test user emails for reference
     const testEmails = TEST_USERS.map(user => user.email);
-    console.log(`Generated ${testEmails.length} new test users`);
     
     // No longer delete existing test users - we'll append instead
     
@@ -357,12 +350,9 @@ export async function POST(req: NextRequest) {
     }));
     
     const insertResult = await db.collection('test_surveys').insertMany(testUserData);
-    console.log(`Inserted ${insertResult.insertedCount} test surveys`);
     
     // Verify data was inserted
     const totalSurveys = await db.collection('test_surveys').countDocuments();
-    
-    console.log(`Verification: Found ${totalSurveys} total test surveys after insertion`);
     
     return NextResponse.json({
       success: true,
@@ -373,7 +363,6 @@ export async function POST(req: NextRequest) {
       }
     });
   } catch (error) {
-    console.error('Error adding test users:', error);
     return NextResponse.json(
       { 
         error: 'Failed to add test users',

@@ -41,7 +41,6 @@ const handler = NextAuth({
     async session({ session, token }) {
       try {
         if (!session?.user?.email) {
-          console.error('Session callback: No user email in session');
           return session;
         }
         
@@ -53,14 +52,10 @@ const handler = NextAuth({
         if (dbUser) {
           // Add the user ID to the session
           session.user.id = dbUser._id.toString();
-          console.log(`Session callback: Set user.id to ${session.user.id} for ${session.user.email}`);
-        } else {
-          console.error(`Session callback: No user found in DB for email ${session.user.email}`);
         }
         
         return session;
       } catch (error) {
-        console.error('Error in session callback:', error);
         return session;
       }
     },

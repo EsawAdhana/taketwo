@@ -442,7 +442,6 @@ export default function TestingPage() {
         throw new Error(data.error || 'Unknown connection error');
       }
     } catch (error) {
-      console.error('Connection check failed:', error);
       setConnectionStatus({
         connected: false,
         message: `Connection failed: ${error instanceof Error ? error.message : String(error)}`
@@ -481,7 +480,6 @@ export default function TestingPage() {
       setCompatibilityResults(data.compatibleUsers || []);
       setSuccess(`Found ${data.compatibleUsers.length} compatible users out of ${data.totalUsersChecked} total users`);
     } catch (error) {
-      console.error('Error calculating compatibility:', error);
       setError(`Error calculating compatibility: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setLoadingCompatibility(false);
@@ -538,7 +536,6 @@ export default function TestingPage() {
         });
       }
     } catch (error) {
-      console.error('Error getting user details:', error);
       setError(`Error getting user details: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setLoadingUserDetails(false);
