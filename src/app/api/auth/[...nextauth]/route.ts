@@ -2,6 +2,7 @@ import NextAuth from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import { connectDB } from '@/lib/mongodb';
 import User from '@/models/User';
+import clientPromise from '@/lib/mongodb';
 
 const handler = NextAuth({
   providers: [
@@ -16,6 +17,19 @@ const handler = NextAuth({
   callbacks: {
     async signIn({ user, account, profile }) {
       try {
+        const client = await clientPromise;
+        const db = client.db('monkeyhouse');
+
+        // Check if user is banned
+        const bannedUser = await db.collection('banned_users').findOne({
+          userEmail: user.email,
+          permanent: true
+        });
+
+        if (bannedUser) {
+          throw new Error('Your account has been permanently banned due to multiple reports.');
+        }
+
         await connectDB();
         
         // Check if user exists
@@ -34,7 +48,7 @@ const handler = NextAuth({
         
         return true;
       } catch (error) {
-        console.error('Error in signIn callback:', error);
+        console.error('Error during sign in:', error);
         return false;
       }
     },

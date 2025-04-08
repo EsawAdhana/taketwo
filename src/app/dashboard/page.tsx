@@ -5,30 +5,26 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { SurveyFormData } from '@/constants/survey-constants';
 import Image from 'next/image';
-import { FiUsers, FiHome, FiDollarSign, FiCalendar, FiList, FiStar, FiSend } from 'react-icons/fi';
-import DMButton from '@/components/DMButton';
+import { FiUsers, FiHome, FiDollarSign, FiCalendar, FiList, FiStar } from 'react-icons/fi';
+import ReportUserModal from '@/components/ReportUserModal';
 
 interface CompatibilityMatch {
   userEmail: string;
+  userProfile: {
+    name?: string;
+    email: string;
+    image?: string;
+  };
   score: number;
   compatibilityDetails: {
     locationScore: number;
     budgetScore: number;
     genderScore: number;
     timingScore: number;
-    roommateScore: number;
     preferencesScore: number;
   };
-  userProfile: {
-    _id: string;
-    email: string;
-    name?: string;
-    image?: string;
-  };
-}
-
-interface UserDetailProfile extends CompatibilityMatch {
   fullProfile?: {
+    firstName?: string;
     gender?: string;
     roomWithDifferentGender?: boolean;
     housingRegion?: string;
@@ -40,9 +36,10 @@ interface UserDetailProfile extends CompatibilityMatch {
     maxBudget?: number;
     preferences?: Array<{item: string; strength: string}>;
     additionalNotes?: string;
-    firstName?: string;
-  }
+  };
 }
+
+interface UserDetailProfile extends CompatibilityMatch {}
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
@@ -57,6 +54,7 @@ export default function DashboardPage() {
   const [selectedUsers, setSelectedUsers] = useState<CompatibilityMatch[]>([]);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [groupName, setGroupName] = useState('');
+  const [showReportModal, setShowReportModal] = useState(false);
   
   useEffect(() => {
     const fetchSurveyData = async () => {
@@ -165,8 +163,8 @@ export default function DashboardPage() {
   };
 
   const handleCreateGroupChat = async () => {
-    if (selectedUsers.length < 2) {
-      alert('Please select at least 2 users for a group chat');
+    if (selectedUsers.length < 1) {
+      alert('Please select at least 1 user for a group chat');
       return;
     }
 
@@ -205,6 +203,11 @@ export default function DashboardPage() {
     }
   };
   
+  const handleReportSuccess = () => {
+    // Optionally refresh the matches or show a success message
+    setShowReportModal(false);
+  };
+  
   if (status === 'loading' || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -239,7 +242,7 @@ export default function DashboardPage() {
               />
               <button
                 onClick={handleCreateGroupChat}
-                disabled={isCreatingGroup || selectedUsers.length < 2 || !groupName.trim()}
+                disabled={isCreatingGroup || selectedUsers.length < 1 || !groupName.trim()}
                 className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg hover:from-indigo-600 hover:to-purple-600 disabled:opacity-50 flex items-center"
               >
                 <FiUsers className="mr-2" />
@@ -395,13 +398,6 @@ export default function DashboardPage() {
                               <FiStar className="mr-1" /> {Math.round(match.score)}% Match
                             </div>
                           </div>
-                          {!isSelected && (
-                            <DMButton
-                              userId={match.userEmail}
-                              userName={displayName}
-                              userImage={match.userProfile.image}
-                            />
-                          )}
                         </div>
                         
                         <div className="grid grid-cols-2 gap-2 mt-2">
@@ -441,13 +437,25 @@ export default function DashboardPage() {
       </div>
       
       {selectedUserDetails && (
-        <UserDetailsModal 
-          match={selectedUserDetails} 
-          onClose={() => setSelectedUserDetails(null)} 
-          formatDate={formatDate}
-          loadingDetails={loadingUserDetails}
-          getFirstName={getFirstName}
-        />
+        <>
+          <UserDetailsModal
+            match={selectedUserDetails}
+            onClose={() => setSelectedUserDetails(null)}
+            formatDate={formatDate}
+            loadingDetails={loadingUserDetails}
+            getFirstName={getFirstName}
+            onReport={() => setShowReportModal(true)}
+          />
+          
+          {showReportModal && (
+            <ReportUserModal
+              userEmail={selectedUserDetails.userEmail}
+              userName={selectedUserDetails.userProfile?.name || selectedUserDetails.userEmail}
+              onClose={() => setShowReportModal(false)}
+              onSuccess={handleReportSuccess}
+            />
+          )}
+        </>
       )}
     </main>
   );
@@ -459,54 +467,42 @@ function UserDetailsModal({
   onClose, 
   formatDate,
   loadingDetails,
-  getFirstName
+  getFirstName,
+  onReport
 }: { 
   match: UserDetailProfile, 
   onClose: () => void,
   formatDate: (date: string) => string,
   loadingDetails: boolean,
-  getFirstName: (user: {name?: string; email: string}, fullProfile?: any) => string
+  getFirstName: (user: {name?: string; email: string}, fullProfile?: any) => string,
+  onReport: () => void
 }) {
   // Get display name
   const displayName = getFirstName(match.userProfile, match.fullProfile);
   
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-10">
-      <div className="bg-white p-0 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
-        <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 p-5 text-white">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold flex items-center">
-              {match.userProfile.image ? (
-                <Image 
-                  src={match.userProfile.image} 
-                  alt={displayName} 
-                  width={40} 
-                  height={40} 
-                  className="rounded-full mr-3 border-2 border-white"
-                />
-              ) : (
-                <div className="w-[40px] h-[40px] bg-white rounded-full flex items-center justify-center mr-3">
-                  <span className="text-blue-600 text-xl font-semibold">{displayName[0]}</span>
-                </div>
-              )}
-              {displayName}
-            </h2>
-            <div className="flex items-center gap-2">
-              <DMButton
-                userId={match.userEmail}
-                userName={displayName}
-                userImage={match.userProfile.image}
-              />
-              <button 
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-white bg-opacity-25 text-white hover:bg-opacity-40 transition-colors"
-                onClick={onClose}
-              >
-                ×
-              </button>
-            </div>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
+      <div className="bg-white p-6 rounded-lg max-w-5xl w-full max-h-screen overflow-y-auto">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold">
+            {match.userProfile?.name || match.userEmail}
+          </h2>
+          <div className="flex items-center gap-2">
+            <button
+              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              onClick={onReport}
+            >
+              Report User
+            </button>
+            <button 
+              className="text-2xl text-gray-600"
+              onClick={onClose}
+            >
+              ×
+            </button>
           </div>
         </div>
-
+        
         <div className="overflow-y-auto p-6" style={{ maxHeight: 'calc(90vh - 80px)' }}>
           <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-5 mb-6 rounded-xl border border-blue-100">
             <h3 className="font-semibold text-lg mb-3 text-blue-800">Compatibility Score: {match.score.toFixed(1)}%</h3>

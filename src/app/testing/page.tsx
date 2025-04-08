@@ -89,6 +89,8 @@ export default function TestingPage() {
     numCopies: 1
   });
   
+  const [notesError, setNotesError] = useState<string>('');
+  
   useEffect(() => {
     // Only redirect if not authenticated (don't check for survey completion)
     if (status === 'unauthenticated') {
@@ -592,6 +594,11 @@ export default function TestingPage() {
         ...prev,
         preferences: updatedPreferences
       }));
+    } else if (name === 'numCopies') {
+      const numValue = parseInt(value);
+      if (!isNaN(numValue) && numValue > 0 && numValue <= 100) {
+        setCustomUserData(prev => ({ ...prev, [name]: numValue }));
+      }
     } else {
       setCustomUserData(prev => ({ ...prev, [name]: value }));
     }
@@ -1019,9 +1026,14 @@ export default function TestingPage() {
                 name="additionalNotes"
                 value={customUserData.additionalNotes}
                 onChange={handleCustomUserInputChange}
-                className="border border-gray-300 rounded p-2 w-full h-24"
+                className={`border ${
+                  notesError ? 'border-red-500' : 'border-gray-300'
+                } rounded p-2 w-full h-24`}
                 placeholder="Enter any additional information that might affect compatibility..."
               />
+              {notesError && (
+                <p className="mt-1 text-sm text-red-500">{notesError}</p>
+              )}
             </div>
             
             {/* Preferences Section */}

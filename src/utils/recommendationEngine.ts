@@ -558,10 +558,23 @@ export async function getRecommendedMatches(
   // Convert to survey data format
   const otherUsersData = otherUsersSurveys.map(documentToSurveyData);
   
+  // Filter out blocked users
+  const nonBlockedUsers = [];
+  for (const otherUserData of otherUsersData) {
+    const [isSystemBlocked, isIndividuallyBlocked] = await Promise.all([
+      isUserBlocked(otherUserData.userEmail!),
+      isUserBlocked(otherUserData.userEmail!, userEmail)
+    ]);
+    
+    if (!isSystemBlocked && !isIndividuallyBlocked) {
+      nonBlockedUsers.push(otherUserData);
+    }
+  }
+  
   // Calculate compatibility scores
   const minCompatibilityScore = testMinCompatibilityScore ?? 50; // Default minimum score
   const compatibilityScores = await Promise.all(
-    otherUsersData.map(async (otherUserData) => {
+    nonBlockedUsers.map(async (otherUserData) => {
       if(useEnhancedScoring) {
         return calculateEnhancedCompatibilityScore(userData, otherUserData, minCompatibilityScore);
       } else {
@@ -634,11 +647,24 @@ export async function getTopMatchesByRegion(
       
     potentialMatchDocs = [...regularSurveys, ...(showTestUsers ? testSurveys : [])];
     
+    // Filter out blocked users
+    const nonBlockedDocs = [];
+    for (const doc of potentialMatchDocs) {
+      const [isSystemBlocked, isIndividuallyBlocked] = await Promise.all([
+        isUserBlocked(doc.userEmail),
+        isUserBlocked(doc.userEmail, userEmail)
+      ]);
+      
+      if (!isSystemBlocked && !isIndividuallyBlocked) {
+        nonBlockedDocs.push(doc);
+      }
+    }
+    
     // Calculate compatibility scores
     let compatibilityScores: CompatibilityScore[] = [];
     
     // Process each potential match
-    for (const matchDoc of potentialMatchDocs) {
+    for (const matchDoc of nonBlockedDocs) {
       const match = documentToSurveyData(matchDoc);
       
       let score;
@@ -677,6 +703,48 @@ export async function getTopMatchesByRegion(
 }
 
 /**
+ * Check if a user is blocked
+ */
+async function isUserBlocked(userEmail: string, currentUserEmail?: string): Promise<boolean> {
+  const client = (await import('@/lib/mongodb')).default;
+  const mongodb = await client;
+  const db = mongodb.db('monkeyhouse');
+  
+  // Check if blocks collection exists
+  const collections = await db.listCollections({ name: 'blocks' }).toArray();
+  if (collections.length === 0) {
+    return false;
+  }
+  
+  // Check for system-wide blocks first
+  const systemBlock = await db.collection('blocks').findOne({
+    blockedUserEmail: userEmail,
+    blockedByEmail: 'system',
+    active: true,
+    isSystemBlock: true
+  });
+  
+  if (systemBlock) {
+    return true;
+  }
+  
+  // If checking for a specific user interaction, check individual blocks
+  if (currentUserEmail) {
+    const individualBlock = await db.collection('blocks').findOne({
+      blockedUserEmail: userEmail,
+      blockedByEmail: currentUserEmail,
+      active: true
+    });
+    
+    if (individualBlock) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
  * Compare two specific users and return detailed compatibility information
  */
 export async function compareUsers(
@@ -703,6 +771,18 @@ export async function compareUsers(
     // Add check to prevent self-comparison
     if (userEmail1 === userEmail2) {
       throw new Error('Cannot compare a user with themselves');
+    }
+
+    // Check if either user is blocked (system-wide or individually)
+    const [user1SystemBlocked, user2SystemBlocked, user1BlockedByUser2, user2BlockedByUser1] = await Promise.all([
+      isUserBlocked(userEmail1),
+      isUserBlocked(userEmail2),
+      isUserBlocked(userEmail1, userEmail2),
+      isUserBlocked(userEmail2, userEmail1)
+    ]);
+
+    if (user1SystemBlocked || user2SystemBlocked || user1BlockedByUser2 || user2BlockedByUser1) {
+      throw new Error('One or both users are blocked');
     }
 
     const client = (await import('@/lib/mongodb')).default;

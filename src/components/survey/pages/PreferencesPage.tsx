@@ -1,6 +1,7 @@
 'use client';
 
 import { NON_NEGOTIABLES, SurveyFormData, Preference, PreferenceStrength, NonNegotiable } from '@/constants/survey-constants';
+import { useState } from 'react';
 
 interface PreferencesPageProps {
   formData: SurveyFormData;
@@ -8,6 +9,7 @@ interface PreferencesPageProps {
 }
 
 export default function PreferencesPage({ formData, setFormData }: PreferencesPageProps) {
+  const [notesError, setNotesError] = useState<string>('');
   // Define preference options
   const PREFERENCE_OPTIONS: Array<{value: PreferenceStrength, label: string}> = [
     { value: "deal breaker", label: 'Deal breaker' },
@@ -99,11 +101,16 @@ export default function PreferencesPage({ formData, setFormData }: PreferencesPa
           id="additionalNotes"
           name="additionalNotes"
           rows={4}
-          className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          className={`w-full rounded-md border ${
+            notesError ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+          } bg-white dark:bg-gray-700 p-2 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
           value={formData.additionalNotes}
           onChange={handleNotesChange}
           placeholder="Feel free to add any additional preferences, lifestyle habits, or other information that might help find compatible roommates"
         />
+        {notesError && (
+          <p className="mt-1 text-sm text-red-500">{notesError}</p>
+        )}
       </div>
     </div>
   );

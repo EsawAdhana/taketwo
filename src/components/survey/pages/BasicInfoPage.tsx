@@ -1,6 +1,7 @@
 'use client';
 
 import { SurveyFormData } from '@/constants/survey-constants';
+import { useState } from 'react';
 
 interface BasicInfoPageProps {
   formData: SurveyFormData;
@@ -8,6 +9,8 @@ interface BasicInfoPageProps {
 }
 
 export default function BasicInfoPage({ formData, setFormData }: BasicInfoPageProps) {
+  const [nameError, setNameError] = useState<string>('');
+
   const handleInputChange = (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -38,12 +41,17 @@ export default function BasicInfoPage({ formData, setFormData }: BasicInfoPagePr
           type="text"
           id="firstName"
           name="firstName"
-          className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          className={`w-full rounded-md border ${
+            nameError ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+          } bg-white dark:bg-gray-700 p-2 text-gray-900 dark:text-gray-100 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
           value={formData.firstName}
           onChange={handleInputChange}
           required
           placeholder="Enter your first name"
         />
+        {nameError && (
+          <p className="mt-1 text-sm text-red-500">{nameError}</p>
+        )}
       </div>
       
       {/* Gender Selection */}

@@ -14,9 +14,11 @@
   "description": "",
   "dependencies": {
     "@prisma/client": "^6.5.0",
+    "@types/bad-words": "^3.0.3",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "bad-words": "^4.0.0",
     "bufferutil": "^4.0.9",
     "encoding": "^0.1.13",
     "mongodb": "latest",
