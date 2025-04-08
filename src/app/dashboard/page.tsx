@@ -20,6 +20,7 @@ interface CompatibilityMatch {
     preferencesScore: number;
   };
   userProfile: {
+    _id: string;
     email: string;
     name?: string;
     image?: string;
@@ -255,7 +256,7 @@ export default function DashboardPage() {
                           </div>
                         </div>
                         <DMButton
-                          userId={match.userProfile._id}
+                          userId={match.userEmail}
                           userName={displayName}
                           userImage={match.userProfile.image}
                         />
@@ -349,8 +350,8 @@ function UserDetailsModal({
             </h2>
             <div className="flex items-center gap-2">
               <DMButton
-                userId={match.userProfile._id}
-                userName={getFirstName(match.userProfile, match.fullProfile)}
+                userId={match.userEmail}
+                userName={displayName}
                 userImage={match.userProfile.image}
               />
               <button 

@@ -9,6 +9,7 @@ import mongoose from 'mongoose';
 export async function GET(req: Request) {
   try {
     const session = await getServerSession();
+    
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -21,8 +22,17 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Database connection failed' }, { status: 503 });
     }
 
+    // Get current user by email since session.user.id might be undefined
+    const currentUser = await User.findOne({ email: session.user.email });
+    
+    if (!currentUser) {
+      return NextResponse.json({ error: 'Current user not found' }, { status: 404 });
+    }
+    
+    const userId = currentUser._id.toString();
+
     const conversations = await Conversation.find({
-      participants: session.user.id
+      participants: userId
     })
       .populate('participants', 'name image')
       .populate('lastMessage')
@@ -31,7 +41,7 @@ export async function GET(req: Request) {
     // Transform the conversations to include other participants' info
     const transformedConversations = conversations.map(conv => {
       const otherParticipants = conv.participants.filter(
-        (p: any) => p._id.toString() !== session.user.id
+        (p: any) => p._id.toString() !== userId
       );
       
       return {
@@ -45,7 +55,7 @@ export async function GET(req: Request) {
       };
     });
 
-    return NextResponse.json(transformedConversations);
+    return NextResponse.json({ success: true, data: transformedConversations });
   } catch (error) {
     console.error('Error fetching conversations:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
@@ -55,6 +65,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const session = await getServerSession();
+    
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -65,7 +76,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Participants array is required' }, { status: 400 });
     }
 
-    // Ensure database connection with better error handling
+    // Ensure database connection
     try {
       await connectDB();
     } catch (dbError) {
@@ -73,35 +84,57 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Database connection failed' }, { status: 503 });
     }
 
-    // Validate that all participants are valid ObjectIds
-    const validParticipants = participants.filter(id => {
-      try {
-        return mongoose.Types.ObjectId.isValid(id);
-      } catch (error) {
-        return false;
-      }
-    });
-
-    if (validParticipants.length === 0) {
-      return NextResponse.json({ error: 'No valid participants provided' }, { status: 400 });
+    // Get current user by email since session.user.id might be undefined
+    const currentUser = await User.findOne({ email: session.user.email });
+    
+    if (!currentUser) {
+      return NextResponse.json({ error: 'Current user not found' }, { status: 404 });
     }
-
+    
+    // Use the current user's ID from database
+    const currentUserId = currentUser._id.toString();
+    
     // Ensure the current user is included in participants
-    const currentUserId = session.user.id;
-    if (!validParticipants.includes(currentUserId)) {
-      validParticipants.push(currentUserId);
+    let filteredParticipants = [...participants];
+    
+    if (!filteredParticipants.includes(currentUserId)) {
+      filteredParticipants.push(currentUserId);
+    }
+    
+    // Look up users by email if the ID is not a valid ObjectId
+    const validParticipants = await Promise.all(filteredParticipants.map(async (id) => {
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        return id;
+      }
+      
+      // If not a valid ObjectId, try to find user by email
+      const user = await User.findOne({ email: id });
+      return user ? user._id : null;
+    }));
+
+    // Filter out any null values (users not found)
+    const finalParticipants = validParticipants.filter(id => id != null);
+
+    if (finalParticipants.length === 0) {
+      return NextResponse.json({ 
+        error: 'No valid participants found',
+        details: {
+          received: participants,
+          valid: finalParticipants
+        }
+      }, { status: 400 });
     }
 
     // For direct messages, check if conversation already exists
     if (!isGroup) {
       try {
         const existingConversation = await Conversation.findOne({
-          participants: { $all: validParticipants, $size: validParticipants.length },
+          participants: { $all: finalParticipants, $size: finalParticipants.length },
           isGroup: false
         });
 
         if (existingConversation) {
-          return NextResponse.json(existingConversation);
+          return NextResponse.json({ success: true, data: existingConversation });
         }
       } catch (findError) {
         console.error('Error finding existing conversation:', findError);
@@ -111,7 +144,7 @@ export async function POST(req: Request) {
 
     // Create new conversation with validated participants
     const conversation = await Conversation.create({
-      participants: validParticipants,
+      participants: finalParticipants,
       isGroup: isGroup || false,
       name: name || null
     });
@@ -121,7 +154,7 @@ export async function POST(req: Request) {
       .populate('participants', 'name image')
       .populate('lastMessage');
 
-    return NextResponse.json(populatedConversation);
+    return NextResponse.json({ success: true, data: populatedConversation });
   } catch (error) {
     console.error('Error creating conversation:', error);
     

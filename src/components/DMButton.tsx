@@ -24,23 +24,38 @@ export default function DMButton({ userId, userName, userImage }: DMButtonProps)
 
     setIsLoading(true);
     try {
+      // Use emails for participants to avoid ID issues
+      // The API will handle finding/converting these to proper IDs
+      const participants = [session.user.email, userId];
+      
+      console.log('Creating conversation with data:', {
+        participants,
+        isGroup: false
+      });
+      
       const response = await fetch('/api/conversations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          participants: [session.user.id, userId],
+          participants,
           isGroup: false,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create conversation');
+        const errorData = await response.json();
+        console.error('Server error details:', errorData);
+        throw new Error(`Failed to create conversation: ${errorData.error || 'Unknown error'}`);
       }
 
-      const conversation = await response.json();
-      router.push(`/messages/${conversation._id}`);
+      const result = await response.json();
+      if (result.success && result.data) {
+        router.push(`/messages/${result.data._id}`);
+      } else {
+        throw new Error('Failed to create conversation: No data returned');
+      }
     } catch (error) {
       console.error('Error creating conversation:', error);
       // Handle error state

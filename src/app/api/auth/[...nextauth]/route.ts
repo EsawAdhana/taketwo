@@ -27,6 +27,8 @@ const handler = NextAuth({
             name: user.name,
             email: user.email,
             image: user.image,
+            firstName: user.name?.split(' ')[0] || 'User',
+            region: 'Default Region',
           });
         }
         
@@ -38,14 +40,22 @@ const handler = NextAuth({
     },
     async session({ session, token }) {
       try {
+        if (!session?.user?.email) {
+          console.error('Session callback: No user email in session');
+          return session;
+        }
+        
         await connectDB();
         
         // Find the user in the database
-        const dbUser = await User.findOne({ email: session.user?.email });
+        const dbUser = await User.findOne({ email: session.user.email });
         
         if (dbUser) {
           // Add the user ID to the session
           session.user.id = dbUser._id.toString();
+          console.log(`Session callback: Set user.id to ${session.user.id} for ${session.user.email}`);
+        } else {
+          console.error(`Session callback: No user found in DB for email ${session.user.email}`);
         }
         
         return session;

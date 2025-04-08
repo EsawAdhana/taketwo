@@ -37,47 +37,22 @@ if (process.env.NODE_ENV === 'development') {
 // separate module, the client can be shared across functions.
 export default clientPromise;
 
-// Track connection status
-let isConnected = false;
-
-// Export a function to ensure the connection is established
+// Function to connect to MongoDB using Mongoose
 export async function connectDB() {
-  if (isConnected) {
-    console.log('MongoDB is already connected');
-    return true;
-  }
-
   try {
-    // Connect to MongoDB using Mongoose
-    await mongoose.connect(uri, {
+    if (mongoose.connection.readyState === 1) {
+      return mongoose.connection;
+    }
+    
+    const conn = await mongoose.connect(uri, {
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 15000,
       socketTimeoutMS: 45000,
     });
     
-    // Set up connection event handlers
-    mongoose.connection.on('connected', () => {
-      console.log('Mongoose connected to MongoDB');
-      isConnected = true;
-    });
-    
-    mongoose.connection.on('error', (err) => {
-      console.error('Mongoose connection error:', err);
-      isConnected = false;
-    });
-    
-    mongoose.connection.on('disconnected', () => {
-      console.log('Mongoose disconnected from MongoDB');
-      isConnected = false;
-    });
-    
-    // Also ensure the native MongoDB client is connected
-    await clientPromise;
-    
-    return true;
+    return conn;
   } catch (error) {
-    console.error('MongoDB connection error:', error);
-    isConnected = false;
+    console.error('Error connecting to MongoDB:', error);
     throw error;
   }
 } 

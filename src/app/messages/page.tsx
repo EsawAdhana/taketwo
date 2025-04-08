@@ -57,8 +57,12 @@ export default function MessagesPage() {
   const fetchConversations = async () => {
     try {
       const response = await fetch('/api/conversations');
-      const data = await response.json();
-      setConversations(data);
+      const result = await response.json();
+      if (result.success && result.data) {
+        setConversations(result.data);
+      } else {
+        console.error('Error fetching conversations:', result.error);
+      }
     } catch (error) {
       console.error('Error fetching conversations:', error);
     }
