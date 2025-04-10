@@ -46,7 +46,7 @@ export default function SurveyPage() {
   }
   
   return (
-    <main className="min-h-screen bg-white py-8 px-4">
+    <main className="min-h-screen bg-white py-4 px-4">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-gray-900 mb-8 text-center">
           {isEditing ? 'Edit Your Preferences' : 'Internship Housing Survey'}

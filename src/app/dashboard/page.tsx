@@ -29,6 +29,7 @@ interface CompatibilityMatch {
     roomWithDifferentGender?: boolean;
     housingRegion?: string;
     housingCities?: string[];
+    internshipCompany?: string;
     internshipStartDate?: string;
     internshipEndDate?: string;
     desiredRoommates?: string;
@@ -222,7 +223,7 @@ export default function DashboardPage() {
   }
   
   return (
-    <main className="min-h-screen bg-white py-8 px-4">
+    <main className="min-h-screen bg-white py-4 px-4">
       <div className="max-w-6xl mx-auto">
         <div className="mb-6 flex justify-between items-center">
           <div>
@@ -481,148 +482,231 @@ function UserDetailsModal({
   const displayName = getFirstName(match.userProfile, match.fullProfile);
   
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
-      <div className="bg-white p-6 rounded-lg max-w-5xl w-full max-h-screen overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">
-            {match.userProfile?.name || match.userEmail}
-          </h2>
-          <div className="flex items-center gap-2">
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-10 p-4">
+      <div className="bg-gray-50 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-xl">
+        <div className="flex items-center justify-between border-b p-4">
+          <div className="flex items-center">
+            {match.userProfile.image ? (
+              <Image 
+                src={match.userProfile.image} 
+                alt={displayName} 
+                width={40} 
+                height={40} 
+                className="rounded-full border-2 border-white shadow mr-3" 
+              />
+            ) : (
+              <div className="w-[40px] h-[40px] bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow mr-3">
+                <span className="text-white font-semibold">{displayName[0]}</span>
+              </div>
+            )}
+            <h2 className="text-xl font-semibold text-gray-900">{displayName}</h2>
+          </div>
+          
+          <div className="flex items-center gap-3">
             <button
-              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              className="px-3 py-1.5 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
               onClick={onReport}
             >
               Report User
             </button>
             <button 
-              className="text-2xl text-gray-600"
+              className="text-gray-500 hover:text-gray-700 transition-colors"
               onClick={onClose}
+              aria-label="Close"
             >
-              ×
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
         </div>
         
-        <div className="overflow-y-auto p-6" style={{ maxHeight: 'calc(90vh - 80px)' }}>
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-5 mb-6 rounded-xl border border-blue-100">
-            <h3 className="font-semibold text-lg mb-3 text-blue-800">Compatibility Score: {match.score.toFixed(1)}%</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-              <div className="bg-white p-3 rounded-lg shadow-sm border border-blue-50">
-                <div className="font-medium text-gray-500 flex items-center text-sm">
-                  <FiHome className="mr-1" /> Location
-                </div>
-                <div className="text-lg font-semibold text-blue-700">{match.compatibilityDetails.locationScore.toFixed(1)}%</div>
-              </div>
-              <div className="bg-white p-3 rounded-lg shadow-sm border border-blue-50">
-                <div className="font-medium text-gray-500 flex items-center text-sm">
-                  <FiDollarSign className="mr-1" /> Budget
-                </div>
-                <div className="text-lg font-semibold text-blue-700">{match.compatibilityDetails.budgetScore.toFixed(1)}%</div>
-              </div>
-              <div className="bg-white p-3 rounded-lg shadow-sm border border-blue-50">
-                <div className="font-medium text-gray-500 flex items-center text-sm">
-                  <FiUsers className="mr-1" /> Gender
-                </div>
-                <div className="text-lg font-semibold text-blue-700">{match.compatibilityDetails.genderScore.toFixed(1)}%</div>
-              </div>
-              <div className="bg-white p-3 rounded-lg shadow-sm border border-blue-50">
-                <div className="font-medium text-gray-500 flex items-center text-sm">
-                  <FiCalendar className="mr-1" /> Timing
-                </div>
-                <div className="text-lg font-semibold text-blue-700">{match.compatibilityDetails.timingScore.toFixed(1)}%</div>
-              </div>
-              <div className="bg-white p-3 rounded-lg shadow-sm border border-blue-50">
-                <div className="font-medium text-gray-500 flex items-center text-sm">
-                  <FiList className="mr-1" /> Preferences
-                </div>
-                <div className="text-lg font-semibold text-blue-700">{match.compatibilityDetails.preferencesScore.toFixed(1)}%</div>
-              </div>
-            </div>
-          </div>
-          
+        <div className="overflow-y-auto p-5" style={{ maxHeight: 'calc(90vh - 70px)' }}>
           {loadingDetails ? (
             <div className="py-10 text-center">
               <div className="animate-pulse text-gray-600">Loading user details...</div>
             </div>
           ) : match.fullProfile ? (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="font-semibold text-lg mb-3 flex items-center text-gray-800">
-                    <FiUsers className="mr-2" /> Basic Information
+              {/* Compatibility Score section */}
+              <div className="bg-white rounded-lg shadow-sm mb-6">
+                <div className="bg-indigo-50 px-5 py-3 rounded-t-lg">
+                  <h3 className="text-lg font-semibold text-indigo-900">
+                    Compatibility Score: {match.score.toFixed(1)}%
                   </h3>
-                  <div className="bg-gray-50 p-5 rounded-xl shadow-sm border border-gray-100">
-                    <p className="mb-2"><strong>First Name:</strong> {match.fullProfile.firstName || 'Not specified'}</p>
-                    <p className="mb-2"><strong>Gender:</strong> {match.fullProfile.gender || 'Not specified'}</p>
-                    <p className="mb-2"><strong>Room with Different Gender:</strong> {match.fullProfile.roomWithDifferentGender ? 'Yes' : 'No'}</p>
-                    <p><strong>Desired Roommates:</strong> {match.fullProfile.desiredRoommates || 'Not specified'}</p>
+                </div>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4">
+                  <div className="bg-white">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-gray-600 flex items-center text-sm font-medium">
+                        <FiHome className="mr-1.5" /> Location
+                      </span>
+                      <span className="text-indigo-700 font-semibold">{match.compatibilityDetails.locationScore.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div className="bg-indigo-600 h-1.5 rounded-full" style={{ width: `${match.compatibilityDetails.locationScore}%` }}></div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-gray-600 flex items-center text-sm font-medium">
+                        <FiDollarSign className="mr-1.5" /> Budget
+                      </span>
+                      <span className="text-indigo-700 font-semibold">{match.compatibilityDetails.budgetScore.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div className="bg-indigo-600 h-1.5 rounded-full" style={{ width: `${match.compatibilityDetails.budgetScore}%` }}></div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-gray-600 flex items-center text-sm font-medium">
+                        <FiCalendar className="mr-1.5" /> Timing
+                      </span>
+                      <span className="text-indigo-700 font-semibold">{match.compatibilityDetails.timingScore.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div className="bg-indigo-600 h-1.5 rounded-full" style={{ width: `${match.compatibilityDetails.timingScore}%` }}></div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-gray-600 flex items-center text-sm font-medium">
+                        <FiList className="mr-1.5" /> Preferences
+                      </span>
+                      <span className="text-indigo-700 font-semibold">{match.compatibilityDetails.preferencesScore.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div className="bg-indigo-600 h-1.5 rounded-full" style={{ width: `${match.compatibilityDetails.preferencesScore}%` }}></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Main content with user information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Left column: Basic Information, Location, Housing Details */}
+                <div className="space-y-6">
+                  {/* Basic Information */}
+                  <div>
+                    <div className="flex items-center mb-3">
+                      <span className="text-indigo-600 mr-2">
+                        <FiUsers className="inline" />
+                      </span>
+                      <h3 className="text-gray-900 font-medium">Basic Information</h3>
+                    </div>
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                      <div className="grid grid-cols-[1fr_auto] gap-y-2 p-4">
+                        <div className="text-gray-600">First Name:</div>
+                        <div className="text-right">{match.fullProfile.firstName || 'Not specified'}</div>
+                        
+                        <div className="text-gray-600">Gender:</div>
+                        <div className="text-right">{match.fullProfile.gender || 'Not specified'}</div>
+                        
+                        <div className="text-gray-600">Room with Different Gender:</div>
+                        <div className="text-right">{match.fullProfile.roomWithDifferentGender ? 'Yes' : 'No'}</div>
+                        
+                        <div className="text-gray-600">Internship Company:</div>
+                        <div className="text-right">{match.fullProfile.internshipCompany || 'Not specified'}</div>
+                        
+                        <div className="text-gray-600">Desired Roommates:</div>
+                        <div className="text-right">{match.fullProfile.desiredRoommates || 'Not specified'}</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Location */}
+                  <div>
+                    <div className="flex items-center mb-3">
+                      <span className="text-indigo-600 mr-2">
+                        <FiHome className="inline" />
+                      </span>
+                      <h3 className="text-gray-900 font-medium">Location</h3>
+                    </div>
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                      <div className="grid grid-cols-[1fr_auto] gap-y-2 p-4">
+                        <div className="text-gray-600">Region:</div>
+                        <div className="text-right">{match.fullProfile.housingRegion || 'Not specified'}</div>
+                        
+                        <div className="text-gray-600">Preferred Cities:</div>
+                        <div className="text-right">{match.fullProfile.housingCities?.join(', ') || 'Not specified'}</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Housing Details */}
+                  <div>
+                    <div className="flex items-center mb-3">
+                      <span className="text-indigo-600 mr-2">
+                        <FiCalendar className="inline" />
+                      </span>
+                      <h3 className="text-gray-900 font-medium">Housing Details</h3>
+                    </div>
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                      <div className="grid grid-cols-[1fr_auto] gap-y-2 p-4">
+                        <div className="text-gray-600">Housing Start:</div>
+                        <div className="text-right">{match.fullProfile.internshipStartDate ? formatDate(match.fullProfile.internshipStartDate) : 'Not specified'}</div>
+                        
+                        <div className="text-gray-600">Housing End:</div>
+                        <div className="text-right">{match.fullProfile.internshipEndDate ? formatDate(match.fullProfile.internshipEndDate) : 'Not specified'}</div>
+                        
+                        <div className="text-gray-600">Monthly Budget:</div>
+                        <div className="text-right">${match.fullProfile.minBudget?.toLocaleString() || '0'} - ${match.fullProfile.maxBudget?.toLocaleString() || '0'}</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 
-                <div>
-                  <h3 className="font-semibold text-lg mb-3 flex items-center text-gray-800">
-                    <FiHome className="mr-2" /> Location
-                  </h3>
-                  <div className="bg-gray-50 p-5 rounded-xl shadow-sm border border-gray-100">
-                    <p className="mb-2"><strong>Region:</strong> {match.fullProfile.housingRegion || 'Not specified'}</p>
-                    <p><strong>Preferred Cities:</strong> {match.fullProfile.housingCities?.join(', ') || 'Not specified'}</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div>
-                <h3 className="font-semibold text-lg mb-3 flex items-center text-gray-800">
-                  <FiCalendar className="mr-2" /> Timing & Budget
-                </h3>
-                <div className="bg-gray-50 p-5 rounded-xl shadow-sm border border-gray-100">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <p className="mb-2"><strong>Internship Start:</strong> {match.fullProfile.internshipStartDate ? formatDate(match.fullProfile.internshipStartDate) : 'Not specified'}</p>
-                      <p><strong>Internship End:</strong> {match.fullProfile.internshipEndDate ? formatDate(match.fullProfile.internshipEndDate) : 'Not specified'}</p>
+                {/* Right column: Preferences and Additional Notes */}
+                <div className="space-y-6">
+                  {/* Preferences - Always display this section */}
+                  <div>
+                    <div className="flex items-center mb-3">
+                      <span className="text-indigo-600 mr-2">
+                        <FiList className="inline" />
+                      </span>
+                      <h3 className="text-gray-900 font-medium">Preferences</h3>
                     </div>
-                    <div>
-                      <p><strong>Monthly Budget:</strong> ${match.fullProfile.minBudget?.toLocaleString() || '0'} - ${match.fullProfile.maxBudget?.toLocaleString() || '0'}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              {match.fullProfile.preferences && match.fullProfile.preferences.length > 0 && (
-                <div>
-                  <h3 className="font-semibold text-lg mb-3 flex items-center text-gray-800">
-                    <FiList className="mr-2" /> Preferences
-                  </h3>
-                  <div className="bg-gray-50 p-5 rounded-xl shadow-sm border border-gray-100">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {match.fullProfile.preferences.map((pref, index) => (
-                        <div key={index} className="flex justify-between items-center p-2 rounded bg-white border border-gray-100">
-                          <span>{pref.item}</span>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            pref.strength === 'must have' ? 'bg-green-100 text-green-800' :
-                            pref.strength === 'prefer' ? 'bg-blue-100 text-blue-800' :
-                            pref.strength === 'neutral' ? 'bg-gray-100 text-gray-800' :
-                            pref.strength === 'prefer not' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-red-100 text-red-800'
-                          }`}>{pref.strength}</span>
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                      {match.fullProfile.preferences && match.fullProfile.preferences.length > 0 ? (
+                        <div className="space-y-2">
+                          {match.fullProfile.preferences.map((pref, index) => (
+                            <div key={index} className="flex justify-between items-center py-1">
+                              <span>{pref.item}</span>
+                              <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{pref.strength}</span>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      ) : (
+                        <p className="text-gray-500">No preferences specified</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Additional Notes - Always display this section */}
+                  <div>
+                    <div className="flex items-center mb-3">
+                      <span className="text-indigo-600 mr-2">
+                        <FiStar className="inline" />
+                      </span>
+                      <h3 className="text-gray-900 font-medium">Additional Notes</h3>
+                    </div>
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                      <div className="max-h-[200px] overflow-y-auto">
+                        {match.fullProfile.additionalNotes ? (
+                          <p className="text-gray-700 whitespace-pre-wrap break-words">{match.fullProfile.additionalNotes}</p>
+                        ) : (
+                          <p className="text-gray-500">Not specified</p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              )}
-              
-              {match.fullProfile.additionalNotes && (
-                <div>
-                  <h3 className="font-semibold text-lg mb-3 flex items-center text-gray-800">
-                    <FiStar className="mr-2" /> Additional Notes
-                  </h3>
-                  <div className="bg-gray-50 p-5 rounded-xl shadow-sm border border-gray-100">
-                    <div className="max-h-[200px] overflow-y-auto pr-2">
-                      <p className="italic whitespace-pre-wrap break-words">{match.fullProfile.additionalNotes}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
           ) : (
             <div className="bg-yellow-50 p-5 rounded-xl text-center border border-yellow-200">

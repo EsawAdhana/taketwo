@@ -19,16 +19,20 @@ export default function TimingBudgetPage({ formData, setFormData }: TimingBudget
       const startDate = name === 'internshipStartDate' ? value : formData.internshipStartDate;
       const endDate = name === 'internshipEndDate' ? value : formData.internshipEndDate;
       
-      if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
-        setDateError('End date cannot be before start date');
-        return;
+      // Only validate if both dates are fully entered (have at least 10 characters for YYYY-MM-DD format)
+      if (startDate && startDate.length >= 10 && endDate && endDate.length >= 10) {
+        if (new Date(endDate) < new Date(startDate)) {
+          setDateError('End date cannot be before start date');
+          return;
+        }
       }
       setDateError('');
     }
     
     if (name === 'minBudget' || name === 'maxBudget') {
-      const minBudget = name === 'minBudget' ? Number(value) : formData.minBudget;
-      const maxBudget = name === 'maxBudget' ? Number(value) : formData.maxBudget;
+      // Parse as number explicitly to avoid any string conversion issues
+      const minBudget = name === 'minBudget' ? parseInt(value, 10) : formData.minBudget;
+      const maxBudget = name === 'maxBudget' ? parseInt(value, 10) : formData.maxBudget;
       
       if (minBudget > maxBudget) {
         setBudgetError('Minimum budget cannot be greater than maximum budget');
@@ -37,51 +41,80 @@ export default function TimingBudgetPage({ formData, setFormData }: TimingBudget
       setBudgetError('');
     }
     
-    setFormData(prev => ({ ...prev, [name]: value }));
+    // For budget inputs, ensure we're setting a number value
+    if (name === 'minBudget' || name === 'maxBudget') {
+      setFormData(prev => ({ ...prev, [name]: parseInt(value, 10) }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
   
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-semibold text-gray-900">Timing & Budget</h2>
+      <h2 className="text-2xl font-semibold text-gray-900">Housing Details</h2>
       
-      {/* Internship Dates */}
+      {/* Housing Dates */}
       <div className="grid gap-6 md:grid-cols-2">
         {/* Start Date */}
         <div>
           <label className="block mb-2 font-medium text-gray-900" htmlFor="internshipStartDate">
-            Internship Start Date *
+            Housing Start Date *
           </label>
-          <input
-            type="date"
-            id="internshipStartDate"
-            name="internshipStartDate"
-            className="w-full rounded-md border border-gray-300 bg-white p-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            value={formData.internshipStartDate}
-            onChange={handleInputChange}
-            required
-          />
+          <div className="relative">
+            <input
+              type="date"
+              id="internshipStartDate"
+              name="internshipStartDate"
+              className="w-full rounded-md border border-gray-300 bg-white p-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+              value={formData.internshipStartDate}
+              onChange={handleInputChange}
+              required
+              onClick={(e) => {
+                // Force the date picker to open when clicked
+                const input = e.target as HTMLInputElement;
+                const mouseEvent = new MouseEvent('mousedown', {
+                  bubbles: true,
+                  cancelable: true,
+                  view: window
+                });
+                input.dispatchEvent(mouseEvent);
+              }}
+            />
+          </div>
         </div>
         
         {/* End Date */}
         <div>
           <label className="block mb-2 font-medium text-gray-900" htmlFor="internshipEndDate">
-            Internship End Date *
+            Housing End Date *
           </label>
-          <input
-            type="date"
-            id="internshipEndDate"
-            name="internshipEndDate"
-            className={`w-full rounded-md border ${dateError ? 'border-red-500' : 'border-gray-300'} bg-white p-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
-            value={formData.internshipEndDate}
-            onChange={handleInputChange}
-            min={formData.internshipStartDate}
-            required
-          />
-          {dateError && (
-            <p className="mt-1 text-sm text-red-500">{dateError}</p>
-          )}
+          <div className="relative">
+            <input
+              type="date"
+              id="internshipEndDate"
+              name="internshipEndDate"
+              className={`w-full rounded-md border ${dateError ? 'border-red-500' : 'border-gray-300'} bg-white p-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer`}
+              value={formData.internshipEndDate}
+              onChange={handleInputChange}
+              required
+              onClick={(e) => {
+                // Force the date picker to open when clicked
+                const input = e.target as HTMLInputElement;
+                const mouseEvent = new MouseEvent('mousedown', {
+                  bubbles: true,
+                  cancelable: true,
+                  view: window
+                });
+                input.dispatchEvent(mouseEvent);
+              }}
+            />
+            {dateError && (
+              <p className="mt-1 text-sm text-red-500">{dateError}</p>
+            )}
+          </div>
         </div>
       </div>
+      <p className="mt-1 text-sm text-gray-500">Click on the date fields to select your ideal move-in and move-out dates using the calendar</p>
       
       {/* Roommates and Budget */}
       <div className="grid gap-6 md:grid-cols-2">

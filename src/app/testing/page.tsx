@@ -72,6 +72,7 @@ export default function TestingPage() {
     roomWithDifferentGender: false,
     housingRegion: 'Bay Area',
     housingCities: ['San Francisco'],
+    internshipCompany: '',
     internshipStartDate: '',
     internshipEndDate: '',
     desiredRoommates: '2',
@@ -653,6 +654,7 @@ export default function TestingPage() {
           roomWithDifferentGender: false,
           housingRegion: 'Bay Area',
           housingCities: ['San Francisco'],
+          internshipCompany: '',
           internshipStartDate: '',
           internshipEndDate: '',
           desiredRoommates: '2',
@@ -875,6 +877,20 @@ export default function TestingPage() {
                   onChange={handleCustomUserInputChange}
                   className="border border-gray-300 rounded p-2 w-full"
                   required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Internship Company
+                </label>
+                <input
+                  type="text"
+                  name="internshipCompany"
+                  value={customUserData.internshipCompany}
+                  onChange={handleCustomUserInputChange}
+                  className="border border-gray-300 rounded p-2 w-full"
+                  placeholder="Enter company name"
                 />
               </div>
               
@@ -1199,7 +1215,6 @@ export default function TestingPage() {
                         <th className="px-4 py-2 border">Compatibility Score</th>
                         <th className="px-4 py-2 border">Location Score</th>
                         <th className="px-4 py-2 border">Budget Score</th>
-                        <th className="px-4 py-2 border">Gender Score</th>
                         <th className="px-4 py-2 border">Timing Score</th>
                         <th className="px-4 py-2 border">Preferences Score</th>
                         <th className="px-4 py-2 border">Actions</th>
@@ -1212,7 +1227,6 @@ export default function TestingPage() {
                           <td className="px-4 py-2 border">{result.score.toFixed(1)}%</td>
                           <td className="px-4 py-2 border">{result.details.locationScore.toFixed(1)}%</td>
                           <td className="px-4 py-2 border">{result.details.budgetScore.toFixed(1)}%</td>
-                          <td className="px-4 py-2 border">{result.details.genderScore.toFixed(1)}%</td>
                           <td className="px-4 py-2 border">{result.details.timingScore.toFixed(1)}%</td>
                           <td className="px-4 py-2 border">{result.details.preferencesScore.toFixed(1)}%</td>
                           <td className="px-4 py-2 border">
@@ -1256,7 +1270,7 @@ export default function TestingPage() {
                 {selectedUserDetails.compatibilityScore && (
                   <div className="bg-blue-50 p-4 mb-4 rounded-lg">
                     <h3 className="font-semibold text-lg mb-2">Compatibility Score: {selectedUserDetails.compatibilityScore.score.toFixed(1)}%</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
                       <div className="bg-white p-2 rounded">
                         <div className="font-medium">Location</div>
                         <div className="text-lg">{selectedUserDetails.compatibilityScore.details.locationScore.toFixed(1)}%</div>
@@ -1264,10 +1278,6 @@ export default function TestingPage() {
                       <div className="bg-white p-2 rounded">
                         <div className="font-medium">Budget</div>
                         <div className="text-lg">{selectedUserDetails.compatibilityScore.details.budgetScore.toFixed(1)}%</div>
-                      </div>
-                      <div className="bg-white p-2 rounded">
-                        <div className="font-medium">Gender</div>
-                        <div className="text-lg">{selectedUserDetails.compatibilityScore.details.genderScore.toFixed(1)}%</div>
                       </div>
                       <div className="bg-white p-2 rounded">
                         <div className="font-medium">Timing</div>
@@ -1296,15 +1306,15 @@ export default function TestingPage() {
                       </div>
                       
                       <div>
-                        <h4 className="font-semibold">Location</h4>
+                        <h4 className="font-semibold">Housing Details</h4>
                         <p><strong>Region:</strong> {selectedUserDetails.centralUser.surveyData.housingRegion || 'N/A'}</p>
                         <p><strong>Cities:</strong> {selectedUserDetails.centralUser.surveyData.housingCities?.join(', ') || 'N/A'}</p>
                       </div>
                       
                       <div>
-                        <h4 className="font-semibold">Timing & Budget</h4>
-                        <p><strong>Internship Start:</strong> {formatDate(selectedUserDetails.centralUser.surveyData.internshipStartDate)}</p>
-                        <p><strong>Internship End:</strong> {formatDate(selectedUserDetails.centralUser.surveyData.internshipEndDate)}</p>
+                        <h4 className="font-semibold">Housing Details</h4>
+                        <p><strong>Housing Start:</strong> {formatDate(selectedUserDetails.centralUser.surveyData.internshipStartDate)}</p>
+                        <p><strong>Housing End:</strong> {formatDate(selectedUserDetails.centralUser.surveyData.internshipEndDate)}</p>
                         <p><strong>Desired Roommates:</strong> {selectedUserDetails.centralUser.surveyData.desiredRoommates || 'N/A'}</p>
                         <p><strong>Monthly Budget:</strong> ${selectedUserDetails.centralUser.surveyData.minBudget?.toLocaleString() || 'N/A'} - ${selectedUserDetails.centralUser.surveyData.maxBudget?.toLocaleString() || 'N/A'}</p>
                       </div>
@@ -1336,15 +1346,15 @@ export default function TestingPage() {
                       </div>
                       
                       <div>
-                        <h4 className="font-semibold">Location</h4>
+                        <h4 className="font-semibold">Housing Details</h4>
                         <p><strong>Region:</strong> {selectedUserDetails.user.surveyData.housingRegion || 'N/A'}</p>
                         <p><strong>Cities:</strong> {selectedUserDetails.user.surveyData.housingCities?.join(', ') || 'N/A'}</p>
                       </div>
                       
                       <div>
-                        <h4 className="font-semibold">Timing & Budget</h4>
-                        <p><strong>Internship Start:</strong> {formatDate(selectedUserDetails.user.surveyData.internshipStartDate)}</p>
-                        <p><strong>Internship End:</strong> {formatDate(selectedUserDetails.user.surveyData.internshipEndDate)}</p>
+                        <h4 className="font-semibold">Housing Details</h4>
+                        <p><strong>Housing Start:</strong> {formatDate(selectedUserDetails.user.surveyData.internshipStartDate)}</p>
+                        <p><strong>Housing End:</strong> {formatDate(selectedUserDetails.user.surveyData.internshipEndDate)}</p>
                         <p><strong>Desired Roommates:</strong> {selectedUserDetails.user.surveyData.desiredRoommates || 'N/A'}</p>
                         <p><strong>Monthly Budget:</strong> ${selectedUserDetails.user.surveyData.minBudget?.toLocaleString() || 'N/A'} - ${selectedUserDetails.user.surveyData.maxBudget?.toLocaleString() || 'N/A'}</p>
                       </div>
@@ -1445,15 +1455,15 @@ export default function TestingPage() {
                   </div>
                   
                   <div>
-                    <h3 className="font-semibold text-lg">Location</h3>
+                    <h3 className="font-semibold text-lg">Housing Details</h3>
                     <p><strong>Region:</strong> {selectedUserDetails.user.surveyData.housingRegion || 'N/A'}</p>
                     <p><strong>Cities:</strong> {selectedUserDetails.user.surveyData.housingCities?.join(', ') || 'N/A'}</p>
                   </div>
                   
                   <div>
-                    <h3 className="font-semibold text-lg">Timing & Budget</h3>
-                    <p><strong>Internship Start:</strong> {formatDate(selectedUserDetails.user.surveyData.internshipStartDate)}</p>
-                    <p><strong>Internship End:</strong> {formatDate(selectedUserDetails.user.surveyData.internshipEndDate)}</p>
+                    <h3 className="font-semibold text-lg">Housing Details</h3>
+                    <p><strong>Housing Start:</strong> {formatDate(selectedUserDetails.user.surveyData.internshipStartDate)}</p>
+                    <p><strong>Housing End:</strong> {formatDate(selectedUserDetails.user.surveyData.internshipEndDate)}</p>
                     <p><strong>Desired Roommates:</strong> {selectedUserDetails.user.surveyData.desiredRoommates || 'N/A'}</p>
                     <p><strong>Monthly Budget:</strong> ${selectedUserDetails.user.surveyData.minBudget?.toLocaleString() || 'N/A'} - ${selectedUserDetails.user.surveyData.maxBudget?.toLocaleString() || 'N/A'}</p>
                   </div>

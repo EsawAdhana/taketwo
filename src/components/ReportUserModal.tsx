@@ -62,7 +62,7 @@ export default function ReportUserModal({ userEmail, userName, onClose, onSucces
             </h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-500"
+              className="text-gray-400 hover:text-gray-500 text-xl"
             >
               ×
             </button>

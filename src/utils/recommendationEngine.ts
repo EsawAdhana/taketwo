@@ -17,9 +17,8 @@ interface CompatibilityScore {
 const WEIGHTS = {
   LOCATION: 30,
   BUDGET: 25,
-  GENDER: 15,
-  TIMING: 15,
-  PREFERENCES: 15
+  TIMING: 25,
+  PREFERENCES: 20
 };
 
 // Budget tolerance (as a percentage)
@@ -235,9 +234,8 @@ export function calculateCompatibilityScore(user: SurveyFormData, potentialMatch
   // Budget compatibility score using the new function
   const budgetScore = calculateBudgetScore(user, potentialMatch);
   
-  // Gender compatibility score
-  const genderScore = user.gender === potentialMatch.gender ? 1 : 
-    (user.roomWithDifferentGender && potentialMatch.roomWithDifferentGender ? 0.7 : 0);
+  // Gender compatibility score - always 1.0 since we've passed hard constraints
+  const genderScore = 1.0;
   
   // Timing compatibility score - calculate the overlap percentage
   const userStart = new Date(user.internshipStartDate);
@@ -288,20 +286,27 @@ export function calculateCompatibilityScore(user: SurveyFormData, potentialMatch
   const preferencesScore = calculatePreferenceScore(user.preferences, potentialMatch.preferences);
   
   // Calculate weighted total score
-  // Combine gender score and roommate preference into a single weighted component
-  const combinedGenderScore = genderScore * 0.7 + roommateScore * 0.3;
+  // Include roommate preference in the preferences score
+  const combinedPreferencesScore = preferencesScore * 0.8 + roommateScore * 0.2;
 
   // Calculate weighted total score
   let weightedScore = 
     (WEIGHTS.LOCATION * totalLocationScore) +
     (WEIGHTS.BUDGET * budgetScore) +
-    (WEIGHTS.GENDER * combinedGenderScore) +
     (WEIGHTS.TIMING * timingScore) +
-    (WEIGHTS.PREFERENCES * preferencesScore);
+    (WEIGHTS.PREFERENCES * combinedPreferencesScore);
   
   // Normalize to 0-100 scale and ensure it doesn't exceed 100%
-  const totalWeight = WEIGHTS.LOCATION + WEIGHTS.BUDGET + WEIGHTS.GENDER + WEIGHTS.TIMING + WEIGHTS.PREFERENCES;
-  const normalizedScore = Math.min(100, (weightedScore / totalWeight) * 100);
+  const totalWeight = WEIGHTS.LOCATION + WEIGHTS.BUDGET + WEIGHTS.TIMING + WEIGHTS.PREFERENCES;
+  let normalizedScore = Math.min(100, (weightedScore / totalWeight) * 100);
+  
+  // Apply company match bonus if both users have specified the same company
+  if (user.internshipCompany && 
+      potentialMatch.internshipCompany && 
+      user.internshipCompany.trim().toLowerCase() === potentialMatch.internshipCompany.trim().toLowerCase()) {
+    // Multiply score by 1.25 to give a 25% boost to users from the same company
+    normalizedScore = Math.min(100, normalizedScore * 1.25);
+  }
   
   return {
     userEmail: potentialMatch.userEmail || '',
@@ -309,7 +314,7 @@ export function calculateCompatibilityScore(user: SurveyFormData, potentialMatch
     compatibilityDetails: {
       locationScore: totalLocationScore * 100,
       budgetScore: budgetScore * 100,
-      genderScore: combinedGenderScore * 100,
+      genderScore: 100, // Always 100% for users who pass hard constraints
       timingScore: timingScore * 100,
       roommateScore: roommateScore * 100,
       preferencesScore: preferencesScore * 100
@@ -370,7 +375,7 @@ EXPLANATION: [your brief explanation]
     const response = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.5,
+      temperature: 0.1,
       max_tokens: 150,
     });
 

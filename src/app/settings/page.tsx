@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { SurveyFormData } from '@/constants/survey-constants';
-import { FiHome } from 'react-icons/fi';
+import { FiHome, FiUser, FiCalendar, FiUsers, FiList, FiStar } from 'react-icons/fi';
+import Image from 'next/image';
 
 export default function SettingsPage() {
   const { data: session, status } = useSession();
@@ -75,117 +76,203 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 py-8 px-4">
+    <main className="min-h-screen bg-gray-50 py-4 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
         </div>
         
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Your Housing Preferences</h2>
-          
-          <div className="grid gap-6 md:grid-cols-2">
-            <div>
-              <h3 className="font-medium text-gray-700 mb-2">Location</h3>
-              <p className="text-gray-600">
-                Region: {surveyData?.housingRegion}<br />
-                Cities: {surveyData?.housingCities.join(', ')}
-              </p>
-            </div>
-            
-            <div>
-              <h3 className="font-medium text-gray-700 mb-2">Timing</h3>
-              <p className="text-gray-600">
-                Start: {surveyData && new Date(surveyData.internshipStartDate).toLocaleDateString()}<br />
-                End: {surveyData && new Date(surveyData.internshipEndDate).toLocaleDateString()}
-              </p>
-            </div>
-            
-            <div>
-              <h3 className="font-medium text-gray-700 mb-2">Roommate Preferences</h3>
-              <p className="text-gray-600">
-                Looking for: {surveyData?.desiredRoommates} roommate(s)<br />
-                Budget: ${surveyData?.minBudget} - ${surveyData?.maxBudget} per month
-              </p>
-            </div>
-            
-            <div>
-              <h3 className="font-medium text-gray-700 mb-2">Preferences & Non-negotiables</h3>
-              <ul className="list-disc list-inside text-gray-600">
-                {surveyData?.preferences.map(pref => {
-                  let strengthIndicator = "";
-                  
-                  switch(pref.strength) {
-                    case "must have": 
-                      strengthIndicator = "(+++)";
-                      break;
-                    case "prefer":
-                      strengthIndicator = "(++)";
-                      break;
-                    case "neutral":
-                      strengthIndicator = "(+/-)";
-                      break;
-                    case "prefer not":
-                      strengthIndicator = "(--)";
-                      break;
-                    case "deal breaker":
-                      strengthIndicator = "(---)";
-                      break;
-                  }
-                  
-                  return (
-                    <li key={pref.item} className={pref.strength === "deal breaker" || pref.strength === "must have" ? "font-medium" : ""}>
-                      {pref.item} <span className={
-                        pref.strength === "neutral" 
-                          ? "text-gray-500"
-                          : pref.strength.includes("not") || pref.strength === "deal breaker" 
-                            ? "text-red-500" 
-                            : "text-green-500"
-                      }>
-                        {strengthIndicator}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
+        <div className="bg-white rounded-lg shadow-sm mb-6">
+          <div className="bg-indigo-50 px-5 py-3 rounded-t-lg">
+            <h2 className="text-lg font-semibold text-indigo-900">Your Housing Preferences</h2>
           </div>
           
-          {surveyData?.additionalNotes && (
-            <div className="mt-6">
-              <h3 className="font-medium text-gray-700 mb-2">Additional Notes</h3>
-              <p className="text-gray-600">{surveyData.additionalNotes}</p>
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Left Column - Basic Info, Location, Housing Details */}
+              <div className="space-y-6">
+                {/* Basic Information */}
+                <div>
+                  <div className="flex items-center mb-3">
+                    <span className="text-indigo-600 mr-2">
+                      <FiUsers className="inline" />
+                    </span>
+                    <h3 className="text-gray-900 font-medium">Basic Information</h3>
+                  </div>
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                    <div className="grid grid-cols-[1fr_auto] gap-y-2 p-4">
+                      <div className="text-gray-600">First Name:</div>
+                      <div className="text-right">{surveyData?.firstName || 'Not specified'}</div>
+                      
+                      <div className="text-gray-600">Gender:</div>
+                      <div className="text-right">{surveyData?.gender || 'Male'}</div>
+                      
+                      <div className="text-gray-600">Room with Different Gender:</div>
+                      <div className="text-right">{surveyData?.roomWithDifferentGender ? 'Yes' : 'No'}</div>
+                      
+                      <div className="text-gray-600">Internship Company:</div>
+                      <div className="text-right">{surveyData?.internshipCompany || 'Not specified'}</div>
+                      
+                      <div className="text-gray-600">Desired Roommates:</div>
+                      <div className="text-right">{surveyData?.desiredRoommates || 2}</div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Location */}
+                <div>
+                  <div className="flex items-center mb-3">
+                    <span className="text-indigo-600 mr-2">
+                      <FiHome className="inline" />
+                    </span>
+                    <h3 className="text-gray-900 font-medium">Location</h3>
+                  </div>
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                    <div className="grid grid-cols-[1fr_auto] gap-y-2 p-4">
+                      <div className="text-gray-600">Region:</div>
+                      <div className="text-right">{surveyData?.housingRegion || 'Bay Area'}</div>
+                      
+                      <div className="text-gray-600">Preferred Cities:</div>
+                      <div className="text-right">{surveyData?.housingCities?.join(', ') || 'San Francisco'}</div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Housing Details */}
+                <div>
+                  <div className="flex items-center mb-3">
+                    <span className="text-indigo-600 mr-2">
+                      <FiCalendar className="inline" />
+                    </span>
+                    <h3 className="text-gray-900 font-medium">Housing Details</h3>
+                  </div>
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                    <div className="grid grid-cols-[1fr_auto] gap-y-2 p-4">
+                      <div className="text-gray-600">Housing Start:</div>
+                      <div className="text-right">{surveyData && new Date(surveyData.internshipStartDate).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}) || 'Jun 14, 2025'}</div>
+                      
+                      <div className="text-gray-600">Housing End:</div>
+                      <div className="text-right">{surveyData && new Date(surveyData.internshipEndDate).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}) || 'Sep 14, 2025'}</div>
+                      
+                      <div className="text-gray-600">Monthly Budget:</div>
+                      <div className="text-right">${surveyData?.minBudget || '1,500'} - ${surveyData?.maxBudget || '2,500'}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Right Column - Preferences and Additional Notes */}
+              <div className="space-y-6">
+                {/* Preferences */}
+                <div>
+                  <div className="flex items-center mb-3">
+                    <span className="text-indigo-600 mr-2">
+                      <FiList className="inline" />
+                    </span>
+                    <h3 className="text-gray-900 font-medium">Preferences</h3>
+                  </div>
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                    <div className="space-y-2">
+                      {surveyData?.preferences.map(pref => {
+                        let badge = "";
+                        
+                        switch(pref.strength) {
+                          case "neutral":
+                            badge = "neutral";
+                            break;
+                          case "prefer not":
+                            badge = "prefer not";
+                            break;
+                          case "must have":
+                            badge = "must have";
+                            break;
+                          default:
+                            badge = pref.strength;
+                        }
+                        
+                        return (
+                          <div key={pref.item} className="flex justify-between items-center py-1">
+                            <span>{pref.item}</span>
+                            <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{badge}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Additional Notes */}
+                {surveyData?.additionalNotes && (
+                  <div>
+                    <div className="flex items-center mb-3">
+                      <span className="text-indigo-600 mr-2">
+                        <FiStar className="inline" />
+                      </span>
+                      <h3 className="text-gray-900 font-medium">Additional Notes</h3>
+                    </div>
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                      <div className="max-h-[200px] overflow-y-auto">
+                        <p className="text-gray-700 whitespace-pre-wrap break-words">{surveyData.additionalNotes}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-          
-          <div className="mt-8 flex justify-end">
-            <button
-              onClick={() => router.push('/survey?edit=true')}
-              className="px-4 py-2 text-blue-600 hover:text-blue-700 font-medium"
-            >
-              Edit Preferences
-            </button>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-lg p-6">
+        <div className="bg-white rounded-lg shadow-sm p-6">
           <h2 className="text-xl font-semibold text-gray-800 mb-4">Account Settings</h2>
           
-          <div className="space-y-4">
-            <button
-              onClick={() => signOut({ callbackUrl: '/' })}
-              className="w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg transition-colors"
-            >
-              Sign Out
-            </button>
+          <div className="mb-6">
+            <div className="flex items-center space-x-4 mb-4">
+              {session.user?.image ? (
+                <div className="relative w-14 h-14 rounded-full overflow-hidden">
+                  <Image 
+                    src={session.user.image}
+                    alt={session.user?.name || 'Profile'} 
+                    fill
+                    className="object-cover"
+                    onError={(e) => {
+                      // If image fails to load, replace with fallback
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center">
+                  <FiUser className="text-blue-600 text-xl" />
+                </div>
+              )}
+              <div>
+                <h3 className="font-medium text-gray-800">{session.user?.name || 'User'}</h3>
+                <p className="text-gray-600 text-sm">{session.user?.email}</p>
+              </div>
+            </div>
             
-            <button
-              onClick={handleDeleteAccount}
-              disabled={isDeleting}
-              className="w-full px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50"
-            >
-              {isDeleting ? 'Deleting Account...' : 'Delete Account'}
-            </button>
+            <div className="border-t border-gray-100 pt-4">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Account Management</h4>
+              <p className="text-sm text-gray-600 mb-4">
+                Deleting your account will permanently remove all your data, including your profile, preferences, and messages.
+              </p>
+              
+              <button
+                onClick={handleDeleteAccount}
+                disabled={isDeleting}
+                className="w-full px-4 py-2 bg-white border border-red-500 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isDeleting ? (
+                  <>
+                    <span className="animate-spin h-4 w-4 border-2 border-red-500 border-t-transparent rounded-full"></span>
+                    Deleting Account...
+                  </>
+                ) : (
+                  'Delete Account'
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>

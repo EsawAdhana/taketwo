@@ -37,6 +37,7 @@ export interface SurveyFormData {
   housingCities: string[];
   
   // Page 3: Timing & Budget
+  internshipCompany: string;
   internshipStartDate: string;
   internshipEndDate: string;
   desiredRoommates: string;
@@ -62,6 +63,7 @@ export const INITIAL_FORM_DATA: SurveyFormData = {
   roomWithDifferentGender: false,
   housingRegion: "",
   housingCities: [],
+  internshipCompany: "",
   internshipStartDate: "",
   internshipEndDate: "",
   desiredRoommates: "1",

@@ -148,7 +148,7 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
         return !!formData.internshipStartDate && 
                !!formData.internshipEndDate && 
                !!formData.desiredRoommates && 
-               formData.minBudget > 0 &&
+               formData.minBudget >= 500 &&
                formData.maxBudget >= formData.minBudget;
       case 4:
         return true;
@@ -224,7 +224,7 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
       {/* Progress Bar */}
       <div className="mb-8">
         <div className="flex justify-between mb-2">
-          {['Basic Info', 'Location', 'Timing & Budget', 'Preferences'].map((step, index) => (
+          {['Basic Info', 'Location', 'Housing Details', 'Preferences'].map((step, index) => (
             <div
               key={step}
               className={`flex-1 text-center ${
