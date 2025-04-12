@@ -339,75 +339,127 @@ async function analyzeAdditionalNotes(notes1: string, notes2: string): Promise<{
   }
   
   try {
-    // Always use the OpenAI API for compatibility analysis
+    // Use a more structured prompt requesting a JSON response
     const prompt = `
-You are an AI roommate compatibility analyzer.
-You'll be given the "Additional Notes" sections of two potential roommates.
-They have already passed the hard constraints, so these individuals are already vaguely compatable.
-In the Additional Notes section, users provided whatever additional information they felt would be necessary to mention.
-See the notes for both roommates below:
-
-Roommate 1: "${notes1}"
-
-Roommate 2: "${notes2}"
-
-Analyze how compatible these potential roommates would be based on their descriptions. 
-Consider factors like: sleep schedules, cleanliness, noise levels, social preferences, lifestyle habits, and any potential conflicts or complementary traits.
-As an example
-Roommate 1: "I love listening to music on my record player, so it may get a little loud sometimes."
-Roommate 2; "I have sensitive ears and find it hard to sleep/focus when there is loud music."
-Because these two statements are contradictory, they are pretty incompatible, so you should return a score of around -10.
-
-First, provide a compatibility score between -10 and +10, where:
--10: Extremely incompatible lifestyles with serious conflicts
--5: Significant lifestyle conflicts
-0: Neutral or balanced compatibility
-+5: Good compatibility with complementary traits
-+10: Exceptionally compatible lifestyles
-
-Then, provide a brief explanation (1-3 sentences maximum) of the key factors that influenced your score.
-
-Format your response exactly like this:
-SCORE: [your numerical score]
-EXPLANATION: [your brief explanation]
-`;
+    You are an AI roommate compatibility analyzer.
+    You'll be given the "Additional Notes" sections of two potential roommates.
+    They have already passed the hard constraints, so these individuals are already vaguely compatible.
+    In the Additional Notes section, users provided whatever additional information they felt would be necessary to mention.
+    
+    Roommate 1: "${notes1}"
+    
+    Roommate 2: "${notes2}"
+    
+    ANALYSIS INSTRUCTIONS:
+    1. Extract relevant information from each roommate's notes into these primary categories:
+       - Sleep schedule
+       - Noise tolerance
+       - Kitchen habits
+       - Cleaning expectations
+       - Socializing style
+       - Guest policy preferences
+       - And any other relevant lifestyle factors mentioned
+    
+    2. For each relevant category that has information, assign a mini-score:
+       -2: Direct conflict that would cause significant issues
+       -1: Mild conflict or friction point
+       +1: Generally compatible preferences
+       +2: Highly complementary or matching preferences
+    
+    3. IMPORTANT: Calculate a final numerical compatibility score between -10 and +10.
+       - DO NOT return a score of 0 by default
+       - Even with limited information, you must lean either positive or negative
+       - A perfectly neutral 0 score should be extremely rare
+    
+    4. Use this scoring guideline:
+       -10 to -7: Extremely incompatible lifestyles
+       -6 to -3: Several notable conflicts that would cause tension
+       -2 to -1: Minor conflicts that could be worked through
+       +1 to +2: Slightly compatible with more positives than negatives
+       +3 to +6: Good compatibility with complementary lifestyles
+       +7 to +10: Exceptionally compatible lifestyles
+    
+    5. Score calculation rules:
+       - Critical conflicts in daily habits (sleep, noise, cleanliness) should heavily impact the score
+       - Multiple minor conflicts should result in a negative score
+       - Matching or complementary traits in important areas should result in a positive score
+       - ANY potential dealbreaker mentioned should result in a score of -3 or lower
+    
+    6. YOUR RESPONSE MUST BE A VALID JSON OBJECT WITH EXACTLY THIS FORMAT:
+    {
+      "score": 5,
+      "explanation": "Brief explanation of key factors that determined this score"
+    }
+    
+    The score MUST be a number between -10 and 10, no plus sign, no quotes.
+    The explanation MUST be a string.
+    Do not include any text before or after the JSON object.
+    `;
 
     const response = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.1,
       max_tokens: 150,
+      response_format: { type: "json_object" }  // Request JSON format
     });
 
-    // Extract the score and explanation from the response
-    const content = response.choices[0].message.content?.trim() || "";
+    // Extract the content from the response
+    const content = response.choices[0].message.content?.trim() || "{}";
     
-    // Parse the response to extract score and explanation
-    let score = 0;
-    let explanation = "";
-    
-    const scoreMatch = content.match(/SCORE:\s*(-?\d+(\.\d+)?)/i);
-    if (scoreMatch) {
-      score = parseFloat(scoreMatch[1]);
+    try {
+      // Parse the JSON response
+      const parsedResponse = JSON.parse(content);
+      
+      let score = 0;
+      let explanation = "";
+      
+      // Extract score and explanation from the parsed JSON
+      if (typeof parsedResponse.score === 'number') {
+        score = parsedResponse.score;
+      }
+      
+      if (typeof parsedResponse.explanation === 'string') {
+        explanation = parsedResponse.explanation;
+      } else {
+        explanation = "No valid explanation provided by LLM.";
+      }
+      
+      // Ensure the score is between -10 and 10
+      const finalScore = Math.max(-10, Math.min(10, score));
+      const finalExplanation = explanation || "No explanation provided by LLM.";
+      
+      return {
+        score: finalScore,
+        explanation: finalExplanation
+      };
+    } catch (jsonError) {
+      console.error('Error parsing JSON from LLM response:', jsonError);
+      
+      // Fallback to regex if JSON parsing fails
+      let score = 0;
+      let explanation = "";
+      
+      // Try to extract score with a more permissive regex
+      const scoreMatch = content.match(/["']?score["']?\s*:\s*([-+]?\d+(\.\d+)?)/i);
+      if (scoreMatch) {
+        score = parseFloat(scoreMatch[1]);
+      }
+      
+      // Try to extract explanation
+      const explanationMatch = content.match(/["']?explanation["']?\s*:\s*["']([^"']+)["']/i);
+      if (explanationMatch) {
+        explanation = explanationMatch[1].trim();
+      }
+      
+      const finalScore = Math.max(-10, Math.min(10, score));
+      const finalExplanation = explanation || "Failed to parse LLM response.";
+      
+      return {
+        score: finalScore,
+        explanation: finalExplanation
+      };
     }
-    
-    const explanationMatch = content.match(/EXPLANATION:\s*(.*?)(\n|$)/i);
-    if (explanationMatch) {
-      explanation = explanationMatch[1].trim();
-    }
-    
-    // Ensure returned value is within expected range
-    if (isNaN(score)) {
-      console.warn("LLM returned non-numeric value for compatibility score:", content);
-      score = 0;
-      explanation = "Could not parse a valid numerical score from LLM response.";
-    }
-    
-    // Ensure the score is between -10 and 10
-    return {
-      score: Math.max(-10, Math.min(10, score)),
-      explanation: explanation || "No explanation provided by LLM."
-    };
   } catch (error) {
     console.error('Error analyzing additional notes with LLM:', error);
     return { 
@@ -448,7 +500,9 @@ export async function calculateEnhancedCompatibilityScore(
     : 50;
   
   // If no base match or below minimum threshold, return null immediately
-  if (!baseScore || baseScore.score < effectiveThreshold) return null;
+  if (!baseScore || baseScore.score < effectiveThreshold) {
+    return null;
+  }
   
   // Analyze additional notes to get a compatibility adjustment
   const additionalInfoAdjustment = await analyzeAdditionalNotes(
@@ -460,21 +514,23 @@ export async function calculateEnhancedCompatibilityScore(
   // Convert -10 to +10 scale to a factor between -0.1 and +0.1
   const adjustmentFactor = additionalInfoAdjustment.score / 100;
   
-  // Apply the adjustment to the base score
-  // Use the percentage adjustment directly, not as a multiplier
-  let adjustedScore = baseScore.score + adjustmentFactor * 100;
+  // Apply adjustment to base score (max +/-10%)
+  let adjustedScore = baseScore.score * (1 + adjustmentFactor);
   
-  // Ensure the score is between 0 and 110% maximum
-  adjustedScore = Math.max(0, Math.min(110, adjustedScore));
+  // Clamp to ensure we never go below 0 or above 100
+  adjustedScore = Math.max(0, Math.min(100, adjustedScore));
   
-  // Check against threshold after adjustment
-  if (adjustedScore < effectiveThreshold) return null;
+  // If after adjustment, score falls below threshold, return null
+  if (adjustedScore < effectiveThreshold) {
+    return null;
+  }
   
-  // Convert the -10 to +10 score to a 0-100 scale for details display
-  const additionalInfoScore = (additionalInfoAdjustment.score + 10) * 5;
+  // Convert the -10 to +10 score to a 0-100 scale for UI display
+  // -10 maps to 0, 0 maps to 50, +10 maps to 100
+  const additionalInfoScore = ((additionalInfoAdjustment.score + 10) / 20) * 100;
   
-  // Create a new score object with adjusted values
-  const enhancedScore: CompatibilityScore = {
+  // Create the enhanced score object with the adjusted score
+  return {
     userEmail: baseScore.userEmail,
     score: adjustedScore,
     compatibilityDetails: {
@@ -485,8 +541,6 @@ export async function calculateEnhancedCompatibilityScore(
       additionalNotesExplanation: additionalInfoAdjustment.explanation
     }
   };
-  
-  return enhancedScore;
 }
 
 /**

@@ -202,21 +202,23 @@ export default function SettingsPage() {
                 </div>
                 
                 {/* Additional Notes */}
-                {surveyData?.additionalNotes && (
-                  <div>
-                    <div className="flex items-center mb-3">
-                      <span className="text-indigo-600 mr-2">
-                        <FiStar className="inline" />
-                      </span>
-                      <h3 className="text-gray-900 font-medium">Additional Notes</h3>
-                    </div>
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                      <div className="max-h-[200px] overflow-y-auto">
-                        <p className="text-gray-700 whitespace-pre-wrap break-words">{surveyData.additionalNotes}</p>
-                      </div>
+                <div>
+                  <div className="flex items-center mb-3">
+                    <span className="text-indigo-600 mr-2">
+                      <FiStar className="inline" />
+                    </span>
+                    <h3 className="text-gray-900 font-medium">Additional Notes</h3>
+                  </div>
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                    <div className="max-h-[200px] overflow-y-auto">
+                      <p className="text-gray-700 whitespace-pre-wrap break-words">
+                        {surveyData?.additionalNotes ? 
+                          surveyData.additionalNotes : 
+                          'No additional notes provided'}
+                      </p>
                     </div>
                   </div>
-                )}
+                </div>
               </div>
             </div>
           </div>

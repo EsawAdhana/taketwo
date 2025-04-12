@@ -275,7 +275,7 @@ export default function TestingPage() {
         setSelectedUsers([]);
         
         // Show success message with deletion counts
-        setSuccess(`Successfully deleted ${data.deletedCounts.surveys} test surveys.`);
+        setSuccess(`Successfully deleted ${data.deletedCounts?.surveys || 0} test surveys.`);
         
         // Update debug info to show current counts
         fetchDebugInfo();
