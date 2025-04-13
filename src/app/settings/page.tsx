@@ -280,7 +280,7 @@ export default function SettingsPage() {
             <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
               <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Account Management</h4>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Deleting your account will permanently remove all your data, including your profile, preferences, and messages.
+                Deleting your account will permanently remove all your data, including your profile and survey responses.
               </p>
               
               <button

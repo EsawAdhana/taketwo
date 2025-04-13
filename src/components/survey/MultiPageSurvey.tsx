@@ -388,15 +388,14 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false, is
                   type="button"
                   onClick={() => {
                     // This Cancel button should always navigate away without a warning
-                    // since it has its own confirmation dialog
-                    if (confirm("You have unsaved changes to your survey. Your changes will be lost if you leave without submitting. Do you want to continue?")) {
-                      // Disable navigation warning before leaving
-                      setShowWarningOnNavigation(false); 
-                      setHasUnsavedChanges(false);
-                      
-                      // Navigate away
-                      router.push('/dashboard');
-                    }
+                    // Remove the confirmation dialog
+                    
+                    // Disable navigation warning before leaving
+                    setShowWarningOnNavigation(false); 
+                    setHasUnsavedChanges(false);
+                    
+                    // Navigate away
+                    router.push('/dashboard');
                   }}
                   className="px-4 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
                 >

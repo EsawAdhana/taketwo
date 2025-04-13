@@ -25,10 +25,11 @@ export function SurveyNavigationProvider({ children }: { children: React.ReactNo
   // 2. The user is revisiting a previously submitted survey
   useEffect(() => {
     if (pathname.includes('/survey')) {
-      const shouldWarn = hasUnsavedChanges || (isSubmitted === true);
+      // Only enable the warning if there are explicit unsaved changes
+      const shouldWarn = hasUnsavedChanges;
       console.log('Survey Navigation - Should warn?', {
         hasUnsavedChanges,
-        isSubmitted,
+        isSubmitted, // Still log isSubmitted for context, but don't use it for the warning condition
         shouldWarn,
         pathname
       });
@@ -82,21 +83,27 @@ export function SurveyNavigationProvider({ children }: { children: React.ReactNo
         
         // Skip if it's linking to the current page
         if (link.href.includes(pathname)) return;
+
+        // Check if we need to show a warning
+        const targetPath = link.href.replace(window.location.origin, '');
+        const restrictedPaths = ['/dashboard', '/messages', '/settings'];
         
-        // Show confirmation dialog
-        e.preventDefault();
-        
-        if (window.confirm("You have unsaved changes to your survey. Your changes will be lost if you leave without submitting. Do you want to continue?")) {
-          // Proceed with navigation
-          if (link.href.startsWith(window.location.origin)) {
-            // For internal links
-            const path = link.href.replace(window.location.origin, '');
-            router.push(path);
-          } else {
-            // For external links
-            window.location.href = link.href;
+        if (showWarningOnNavigation && restrictedPaths.includes(targetPath)) {
+          const confirmationMessage = "You have unsaved changes. Are you sure you want to leave? Your changes will be lost.";
+          if (!window.confirm(confirmationMessage)) {
+            e.preventDefault(); // Prevent navigation
+            e.stopImmediatePropagation(); // Stop other listeners
+            return; // Stop execution
           }
         }
+        
+        // Proceed with navigation
+        if (link.href.startsWith(window.location.origin)) {
+          // For internal links, prevent default and use router
+          e.preventDefault(); 
+          router.push(targetPath);
+        } 
+        // For external links, do NOT prevent default, let the browser handle it.
       }
       // If it's a button that might navigate
       else if (navigationElement.tagName === 'BUTTON') {
@@ -104,21 +111,26 @@ export function SurveyNavigationProvider({ children }: { children: React.ReactNo
         if (navigationElement.hasAttribute('disabled') || navigationElement.classList.contains('disabled')) {
           return;
         }
-        
-        // If this button is not part of the survey form controls
-        if (!navigationElement.closest('form')) {
-          // Show warning for any button outside of the form
-          e.preventDefault();
-          e.stopPropagation();
-          
-          if (window.confirm("You have unsaved changes to your survey. Your changes will be lost if you leave without submitting. Do you want to continue?")) {
-            // Let the original click handler proceed
-            setShowWarningOnNavigation(false);
-            setTimeout(() => {
-              navigationElement.click();
-            }, 0);
+
+        // Check if we need to show a warning for button-based navigation (e.g., settings or messages could potentially use buttons)
+        // This part might need adjustment depending on how your buttons trigger navigation.
+        // For now, we assume buttons that navigate away from the survey page will also trigger the warning if needed.
+        // Let's focus on the common case: the Sign Out button
+        if (navigationElement.textContent?.includes('Sign Out')) {
+          if (showWarningOnNavigation) {
+            const confirmationMessage = "You have unsaved changes. Are you sure you want to sign out? Your changes will be lost.";
+            if (!window.confirm(confirmationMessage)) {
+              e.preventDefault(); // Prevent the default action (like form submission if inside one)
+              e.stopImmediatePropagation(); // Stop other listeners
+              return; // Stop execution
+            }
           }
+          // If confirmed or no warning needed, let the button's original onClick handler proceed (handled by Navigation.tsx)
+          return; 
         }
+        
+        // If this button is not part of the survey form controls and not the sign out button,
+        // let its click handler proceed without interference from this context.
       }
     };
     
@@ -129,25 +141,6 @@ export function SurveyNavigationProvider({ children }: { children: React.ReactNo
       document.removeEventListener('click', handleClick, { capture: true });
     };
   }, [showWarningOnNavigation, pathname, router]);
-  
-  // Add beforeunload event for browser navigation (back button, refresh)
-  useEffect(() => {
-    if (!showWarningOnNavigation) return;
-    
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      // This text might not show in all browsers as they use their own messages,
-      // but we set it anyway for browsers that do respect it
-      e.returnValue = 'You have unsaved changes to your survey. Your changes will be lost if you leave without submitting.';
-      return 'You have unsaved changes to your survey. Your changes will be lost if you leave without submitting.';
-    };
-    
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [showWarningOnNavigation]);
   
   return (
     <SurveyNavigationContext.Provider value={{ 
