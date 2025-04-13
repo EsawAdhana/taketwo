@@ -13,7 +13,6 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@prisma/client": "^6.5.0",
     "@types/bad-words": "^3.0.3",
     "@types/node": "latest",
     "@types/react": "latest",
@@ -26,7 +25,6 @@
     "next": "13.4.19",
     "next-auth": "latest",
     "openai": "^4.91.1",
-    "prisma": "^6.5.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-icons": "^5.5.0",
