@@ -35,7 +35,7 @@ export default function TimingBudgetPage({ formData, setFormData }: TimingBudget
       const maxBudget = name === 'maxBudget' ? parseInt(value, 10) : formData.maxBudget;
       
       if (minBudget > maxBudget) {
-        setBudgetError('Minimum budget cannot be greater than maximum budget');
+        setBudgetError('Maximum budget cannot be less than minimum budget');
         return;
       }
       setBudgetError('');
@@ -69,16 +69,6 @@ export default function TimingBudgetPage({ formData, setFormData }: TimingBudget
               value={formData.internshipStartDate}
               onChange={handleInputChange}
               required
-              onClick={(e) => {
-                // Force the date picker to open when clicked
-                const input = e.target as HTMLInputElement;
-                const mouseEvent = new MouseEvent('mousedown', {
-                  bubbles: true,
-                  cancelable: true,
-                  view: window
-                });
-                input.dispatchEvent(mouseEvent);
-              }}
             />
           </div>
         </div>
@@ -97,16 +87,6 @@ export default function TimingBudgetPage({ formData, setFormData }: TimingBudget
               value={formData.internshipEndDate}
               onChange={handleInputChange}
               required
-              onClick={(e) => {
-                // Force the date picker to open when clicked
-                const input = e.target as HTMLInputElement;
-                const mouseEvent = new MouseEvent('mousedown', {
-                  bubbles: true,
-                  cancelable: true,
-                  view: window
-                });
-                input.dispatchEvent(mouseEvent);
-              }}
             />
             {dateError && (
               <p className="mt-1 text-sm text-red-500">{dateError}</p>
@@ -114,7 +94,7 @@ export default function TimingBudgetPage({ formData, setFormData }: TimingBudget
           </div>
         </div>
       </div>
-      <p className="mt-1 text-sm text-gray-500">Click on the date fields to select your ideal move-in and move-out dates using the calendar</p>
+      <p className="mt-1 text-sm text-gray-500">Select your ideal move-in and move-out dates using the calendar</p>
       
       {/* Roommates and Budget */}
       <div className="grid gap-6 md:grid-cols-2">

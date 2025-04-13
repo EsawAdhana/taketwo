@@ -209,7 +209,7 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
               Survey Completed!
             </h3>
             <p className="text-gray-600 mb-6">
-              Thank you for completing the survey. You can always update your preferences later in settings.
+              Thank you for completing the survey. You can always update your preferences later by accessing the "Survey" tab.
             </p>
             <button
               onClick={handleGoToDashboard}
