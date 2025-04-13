@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 interface Participant {
   _id: string;
@@ -292,73 +293,131 @@ export default function ConversationPage({
 
   if (!conversation) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="animate-pulse text-gray-600">Loading conversation...</div>
+      <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+        {/* Header */}
+        <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 flex justify-between items-center">
+          <div className="animate-pulse h-8 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+          <div className="animate-pulse h-8 w-8 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-900 space-y-4">
+          <div className="space-y-4">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="animate-pulse flex flex-col">
+                <div className={`${i % 2 === 0 ? 'mr-auto' : 'ml-auto'} max-w-[70%]`}>
+                  <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded-lg mb-1"></div>
+                  <div className="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded self-end mt-1"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Message Input */}
+        <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <form onSubmit={sendMessage} className="flex space-x-2">
+            <input
+              type="text"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              placeholder="Type a message..."
+              className="flex-1 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-200 dark:border-gray-600"
+              disabled={isSending}
+            />
+            <button
+              type="submit"
+              className="bg-blue-500 text-white rounded-lg px-4 py-2 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              disabled={!newMessage.trim() || isSending}
+            >
+              {isSending ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
+              ) : (
+                'Send'
+              )}
+            </button>
+          </form>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen bg-white">
-      {/* Conversation header */}
-      <div className="bg-white border-b border-gray-200 p-4 flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          {conversation && (
-            <>
-              <button 
-                onClick={() => router.push('/messages')}
-                className="p-1 rounded-full hover:bg-gray-100"
+    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+      {/* Header */}
+      <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 flex justify-between items-center">
+        {!conversation ? (
+          <>
+            <div className="animate-pulse h-8 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            <div className="animate-pulse h-8 w-8 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center space-x-3">
+              <Link 
+                href="/messages"
+                className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
-              </button>
-              <div className="flex items-center space-x-2">
-                <div className="relative w-10 h-10">
-                  <Image
-                    src={conversation.otherParticipants[0]?.image || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23cccccc"%3E%3Cpath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/%3E%3C/svg%3E'}
-                    alt={conversation.otherParticipants[0]?.name || 'Unknown'}
-                    fill
-                    className="rounded-full object-cover"
-                  />
+              </Link>
+              <div className="flex items-center space-x-3">
+                <div className="relative">
+                  {conversation.isGroup ? (
+                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <div className="relative w-10 h-10">
+                      <Image
+                        src={conversation.otherParticipants[0]?.image || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23cccccc"%3E%3Cpath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/%3E%3C/svg%3E'}
+                        alt={conversation.otherParticipants[0]?.name || 'User'}
+                        fill
+                        className="rounded-full object-cover"
+                      />
+                    </div>
+                  )}
                 </div>
                 <div>
-                  <h1 className="font-semibold text-gray-900">
+                  <h1 className="font-semibold text-gray-900 dark:text-gray-100">
                     {conversation.isGroup
                       ? conversation.name
                       : conversation.otherParticipants[0]?.name || 'Unknown User'}
                   </h1>
                   {conversation.isGroup && (
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
                       {conversation.participants.length} participants
                     </p>
                   )}
                 </div>
               </div>
-            </>
-          )}
-        </div>
+            </div>
+          </>
+        )}
         
         {/* Menu button for additional options */}
         <div className="flex items-center">
           <div className="relative">
             <button 
               onClick={() => setShowMenu(!showMenu)}
-              className="p-2 rounded-full hover:bg-gray-100"
+              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
               aria-label="Conversation menu"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
               </svg>
             </button>
             
             {/* Dropdown menu */}
             {showMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
+              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-700">
                 <div className="py-1">
                   <button
                     onClick={deleteConversation}
-                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                    className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                     disabled={isDeleting}
                   >
                     {isDeleting ? 'Deleting...' : 'Delete conversation'}
@@ -371,18 +430,33 @@ export default function ConversationPage({
       </div>
 
       {/* Messages */}
-      <div 
-        id="messages-container"
-        className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50"
-      >
-        {isLoading ? (
-          <div className="flex justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-900 space-y-4">
+        {!conversation ? (
+          <div className="space-y-4">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="animate-pulse flex flex-col">
+                <div className={`${i % 2 === 0 ? 'mr-auto' : 'ml-auto'} max-w-[70%]`}>
+                  <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded-lg mb-1"></div>
+                  <div className="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded self-end mt-1"></div>
+                </div>
+              </div>
+            ))}
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-gray-500">
-            <p>No messages yet</p>
-            <p className="text-sm">Start the conversation!</p>
+          <div className="h-full flex items-center justify-center">
+            <div className="text-center">
+              <div className="bg-gray-100 dark:bg-gray-800 rounded-full p-4 inline-block mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-1">
+                Start the conversation
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400">
+                Send a message to begin chatting
+              </p>
+            </div>
           </div>
         ) : (
           messages.map((message) => (
@@ -398,7 +472,7 @@ export default function ConversationPage({
                 className={`max-w-[70%] rounded-lg p-3 ${
                   message.senderId._id === session?.user?.id
                     ? 'bg-blue-500 text-white'
-                    : 'bg-white text-gray-900 shadow-sm border border-gray-200'
+                    : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm border border-gray-200 dark:border-gray-700'
                 }`}
               >
                 {message.senderId._id !== session?.user?.id && (
@@ -411,7 +485,7 @@ export default function ConversationPage({
                         className="rounded-full object-cover"
                       />
                     </div>
-                    <span className="text-xs font-medium">
+                    <span className="text-xs font-medium dark:text-gray-300">
                       {message.senderId.name}
                     </span>
                   </div>
@@ -434,7 +508,7 @@ export default function ConversationPage({
                             .map((reader) => (
                               <div
                                 key={reader._id}
-                                className="relative w-4 h-4 rounded-full border border-white"
+                                className="relative w-4 h-4 rounded-full border border-white dark:border-blue-600"
                               >
                                 <Image
                                   src={reader.image || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23cccccc"%3E%3Cpath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/%3E%3C/svg%3E'}
@@ -445,8 +519,8 @@ export default function ConversationPage({
                               </div>
                             ))}
                           {message.readBy.length > 3 && (
-                            <div className="relative w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center">
-                              <span className="text-[8px] text-gray-600">
+                            <div className="relative w-4 h-4 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                              <span className="text-[8px] text-gray-600 dark:text-gray-300">
                                 +{message.readBy.length - 3}
                               </span>
                             </div>
@@ -466,14 +540,14 @@ export default function ConversationPage({
       </div>
 
       {/* Message Input */}
-      <div className="p-4 border-t border-gray-200 bg-white">
+      <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         <form onSubmit={sendMessage} className="flex space-x-2">
           <input
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Type a message..."
-            className="flex-1 bg-gray-50 text-gray-900 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-200"
+            className="flex-1 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-200 dark:border-gray-600"
             disabled={isSending}
           />
           <button

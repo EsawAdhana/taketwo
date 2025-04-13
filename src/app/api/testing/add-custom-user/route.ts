@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
     const collection = db.collection("test_surveys");
     
     // Check if a test user with this email already exists
+    /* // Email uniqueness check might not be desired for bulk testing
     const existingUser = await collection.findOne({ userEmail: body.email });
     if (existingUser) {
       return NextResponse.json(
@@ -59,6 +60,7 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    */
     
     // Process preferences
     let preferences: Preference[];
@@ -76,7 +78,7 @@ export async function POST(req: NextRequest) {
     for (let i = 0; i < numCopies; i++) {
       // Generate unique name and email for each copy
       const nameSuffix = numCopies > 1 ? ` ${i + 1}` : '';
-      const emailPrefix = body.email.split('@')[0];
+      const emailPrefix = body.name || 'User';
       const emailDomain = body.email.split('@')[1];
       const uniqueEmail = numCopies > 1 ? `${emailPrefix}${i + 1}@${emailDomain}` : body.email;
 

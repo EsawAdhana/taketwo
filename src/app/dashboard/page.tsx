@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { SurveyFormData } from '@/constants/survey-constants';
 import Image from 'next/image';
-import { FiUsers, FiHome, FiDollarSign, FiCalendar, FiList, FiStar } from 'react-icons/fi';
+import { FiUsers, FiHome, FiDollarSign, FiCalendar, FiList, FiStar, FiFlag, FiX, FiMapPin } from 'react-icons/fi';
 import ReportUserModal from '@/components/ReportUserModal';
 
 interface CompatibilityMatch {
@@ -138,21 +138,18 @@ export default function DashboardPage() {
     }
   };
   
-  // Helper function to get first name
-  const getFirstName = (user: {name?: string; email: string}, fullProfile?: any): string => {
-    // First check if firstName exists in the fullProfile
+  // Helper function to get user display name
+  const getName = (userProfile?: {name?: string}, fullProfile?: any): string => {
+    // Use firstName from the fullProfile (survey data) if available
     if (fullProfile?.firstName) {
       return fullProfile.firstName;
     }
-    // Then check if name exists in the user profile
-    if (user.name) {
-      return user.name.split(' ')[0];
+    // Use name from basic user profile if available (might still be 'User')
+    if (userProfile?.name) {
+      return userProfile.name;
     }
-    // Finally, extract from email as a last resort
-    const emailName = user.email.split('@')[0];
-    // Capitalize first letter and handle usernames with numbers or special chars
-    const namePart = emailName.split(/[^a-zA-Z]/, 1)[0];
-    return namePart.charAt(0).toUpperCase() + namePart.slice(1);
+    // Fallback to 'User'
+    return 'User';
   };
   
   const toggleUserSelection = (match: CompatibilityMatch) => {
@@ -184,7 +181,14 @@ export default function DashboardPage() {
         body: JSON.stringify({
           participants: [session?.user?.email, ...selectedUsers.map(u => u.userEmail)],
           isGroup: true,
-          name: groupName.trim()
+          name: groupName.trim(),
+          participantNames: {
+            [session?.user?.email || '']: session?.user?.email || '',
+            ...selectedUsers.reduce((acc, user) => ({
+              ...acc,
+              [user.userEmail]: getName(user.userProfile, user.fullProfile)
+            }), {})
+          }
         }),
       });
 
@@ -223,14 +227,14 @@ export default function DashboardPage() {
   }
   
   return (
-    <main className="min-h-screen bg-white py-4 px-4">
+    <main className="min-h-screen bg-white dark:bg-gray-900 py-4 px-4">
       <div className="max-w-6xl mx-auto">
         <div className="mb-6 flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
               Welcome to Your Dashboard
             </h1>
-            <p className="text-gray-600 mt-2">Find your perfect roommate match below.</p>
+            <p className="text-gray-600 dark:text-gray-300 mt-2">Find your perfect roommate match below.</p>
           </div>
           {selectedUsers.length > 0 && (
             <div className="flex items-center gap-4">
@@ -239,7 +243,7 @@ export default function DashboardPage() {
                 placeholder="Enter group name"
                 value={groupName}
                 onChange={(e) => setGroupName(e.target.value)}
-                className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               />
               <button
                 onClick={handleCreateGroupChat}
@@ -254,7 +258,7 @@ export default function DashboardPage() {
                   setSelectedUsers([]);
                   setGroupName('');
                 }}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100"
               >
                 Cancel
               </button>
@@ -263,17 +267,17 @@ export default function DashboardPage() {
         </div>
         
         {!surveyData?.isSubmitted && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-8">
+          <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-8">
             <div className="flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500 dark:text-amber-400 mr-2" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
-              <p className="text-amber-700">
+              <p className="text-amber-700 dark:text-amber-300">
                 <span className="font-medium">Note:</span> You haven't completed your housing preferences survey yet. 
                 To see personalized roommate recommendations, please 
                 <button 
                   onClick={() => router.push('/survey')} 
-                  className="text-blue-600 underline font-medium ml-1"
+                  className="text-blue-600 dark:text-blue-400 underline font-medium ml-1"
                 >
                   complete your survey
                 </button>.
@@ -282,8 +286,8 @@ export default function DashboardPage() {
           </div>
         )}
         
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-8">
-          <div className="bg-blue-500 px-6 py-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden mb-8">
+          <div className="bg-blue-500 dark:bg-blue-600 px-6 py-4">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold text-white flex items-center">
                 <FiUsers className="mr-2" /> Compatible Roommates
@@ -298,7 +302,7 @@ export default function DashboardPage() {
                         checked={showTestUsers}
                         onChange={() => setShowTestUsers(!showTestUsers)}
                       />
-                      <div className={`w-10 h-5 ${showTestUsers ? 'bg-blue-400' : 'bg-gray-300'} rounded-full shadow-inner`}></div>
+                      <div className={`w-10 h-5 ${showTestUsers ? 'bg-blue-400' : 'bg-gray-300 dark:bg-gray-600'} rounded-full shadow-inner`}></div>
                       <div className={`absolute left-0 top-0 w-5 h-5 bg-white rounded-full shadow transform ${showTestUsers ? 'translate-x-5' : ''} transition-transform`}></div>
                     </div>
                     <span className="ml-2 text-white text-sm">Show Test Users</span>
@@ -311,23 +315,26 @@ export default function DashboardPage() {
           <div className="p-6">
             {!surveyData?.isSubmitted ? (
               <div className="text-center py-10">
-                <p className="text-gray-600 mb-4">
-                  Complete your housing preferences survey to see your personalized roommate matches.
+                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                  Complete your survey to see potential roommate matches.
                 </p>
                 <button
                   onClick={() => router.push('/survey')}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md"
                 >
                   Take Survey
                 </button>
               </div>
             ) : recommendationsLoading ? (
               <div className="text-center py-10">
-                <div className="animate-pulse text-gray-600">Loading recommendations...</div>
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-blue-500 dark:border-blue-400 border-t-transparent mb-4"></div>
+                <p className="text-gray-600 dark:text-gray-300">
+                  Finding your perfect roommates...
+                </p>
               </div>
             ) : recommendations.length === 0 ? (
               <div className="text-center py-10">
-                <p className="text-gray-600 mb-4">
+                <p className="text-gray-600 dark:text-gray-300 mb-4">
                   We haven't found any matches for you yet. Check back later or try adjusting your preferences.
                 </p>
               </div>
@@ -336,12 +343,12 @@ export default function DashboardPage() {
                 {recommendations.map((match) => {
                   const matchQuality = match.score >= 85 ? 'high' : match.score >= 70 ? 'medium' : 'standard';
                   const qualityColors = {
-                    high: 'from-green-50 to-green-100 border-green-200 hover:from-green-100 hover:to-green-50',
-                    medium: 'from-blue-50 to-blue-100 border-blue-200 hover:from-blue-100 hover:to-blue-50',
-                    standard: 'from-gray-50 to-gray-100 border-gray-200 hover:from-gray-100 hover:to-gray-50'
+                    high: 'from-green-50 to-green-100 border-green-200 hover:from-green-100 hover:to-green-50 dark:from-green-900/20 dark:to-green-800/20 dark:border-green-700 dark:hover:from-green-800/30 dark:hover:to-green-900/30',
+                    medium: 'from-blue-50 to-blue-100 border-blue-200 hover:from-blue-100 hover:to-blue-50 dark:from-blue-900/20 dark:to-blue-800/20 dark:border-blue-700 dark:hover:from-blue-800/30 dark:hover:to-blue-900/30',
+                    standard: 'from-gray-50 to-gray-100 border-gray-200 hover:from-gray-100 hover:to-gray-50 dark:from-gray-800/50 dark:to-gray-700/50 dark:border-gray-600 dark:hover:from-gray-700/60 dark:hover:to-gray-800/60'
                   };
                   
-                  const displayName = getFirstName(match.userProfile, match.fullProfile);
+                  const displayName = getName(match.userProfile, match.fullProfile);
                   const isSelected = selectedUsers.some(u => u.userEmail === match.userEmail);
                   
                   return (
@@ -354,7 +361,7 @@ export default function DashboardPage() {
                       {/* Selection indicator */}
                       <div 
                         className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
-                          isSelected ? 'bg-indigo-500 text-white' : 'bg-white border-2 border-gray-300'
+                          isSelected ? 'bg-indigo-500 text-white' : 'bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-500'
                         }`}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -380,7 +387,7 @@ export default function DashboardPage() {
                                 alt={displayName} 
                                 width={60} 
                                 height={60} 
-                                className="rounded-full border-2 border-white shadow"
+                                className="rounded-full border-2 border-white dark:border-gray-700 shadow"
                               />
                             ) : (
                               <div className="w-[60px] h-[60px] bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow">
@@ -390,11 +397,11 @@ export default function DashboardPage() {
                           </div>
                           
                           <div className="flex-1">
-                            <h3 className="text-lg font-semibold truncate">{displayName}</h3>
+                            <h3 className="text-lg font-semibold truncate dark:text-gray-100">{displayName}</h3>
                             <div className={`px-3 py-1 rounded-full font-medium text-sm inline-flex items-center
-                              ${match.score >= 85 ? 'bg-green-100 text-green-800' : 
-                              match.score >= 70 ? 'bg-blue-100 text-blue-800' : 
-                              'bg-gray-100 text-gray-800'}`}
+                              ${match.score >= 85 ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 
+                              match.score >= 70 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' : 
+                              'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}`}
                             >
                               <FiStar className="mr-1" /> {Math.round(match.score)}% Match
                             </div>
@@ -403,28 +410,28 @@ export default function DashboardPage() {
                         
                         <div className="grid grid-cols-2 gap-2 mt-2">
                           <div className="text-sm">
-                            <div className="text-gray-500 flex items-center">
-                              <FiHome className="mr-1" /> Location
+                            <div className="text-gray-500 dark:text-gray-400 flex items-center">
+                              <FiMapPin className="mr-1" /> Location
                             </div>
-                            <div className="font-medium">{Math.round(match.compatibilityDetails.locationScore)}%</div>
+                            <div className="font-medium dark:text-gray-300">{Math.round(match.compatibilityDetails.locationScore)}%</div>
                           </div>
                           <div className="text-sm">
-                            <div className="text-gray-500 flex items-center">
+                            <div className="text-gray-500 dark:text-gray-400 flex items-center">
                               <FiDollarSign className="mr-1" /> Budget
                             </div>
-                            <div className="font-medium">{Math.round(match.compatibilityDetails.budgetScore)}%</div>
+                            <div className="font-medium dark:text-gray-300">{Math.round(match.compatibilityDetails.budgetScore)}%</div>
                           </div>
                           <div className="text-sm">
-                            <div className="text-gray-500 flex items-center">
+                            <div className="text-gray-500 dark:text-gray-400 flex items-center">
                               <FiCalendar className="mr-1" /> Timing
                             </div>
-                            <div className="font-medium">{Math.round(match.compatibilityDetails.timingScore)}%</div>
+                            <div className="font-medium dark:text-gray-300">{Math.round(match.compatibilityDetails.timingScore)}%</div>
                           </div>
                           <div className="text-sm">
-                            <div className="text-gray-500 flex items-center">
+                            <div className="text-gray-500 dark:text-gray-400 flex items-center">
                               <FiList className="mr-1" /> Preferences
                             </div>
-                            <div className="font-medium">{Math.round(match.compatibilityDetails.preferencesScore)}%</div>
+                            <div className="font-medium dark:text-gray-300">{Math.round(match.compatibilityDetails.preferencesScore)}%</div>
                           </div>
                         </div>
                       </div>
@@ -444,14 +451,14 @@ export default function DashboardPage() {
             onClose={() => setSelectedUserDetails(null)}
             formatDate={formatDate}
             loadingDetails={loadingUserDetails}
-            getFirstName={getFirstName}
+            getName={getName}
             onReport={() => setShowReportModal(true)}
           />
           
           {showReportModal && (
             <ReportUserModal
               userEmail={selectedUserDetails.userEmail}
-              userName={selectedUserDetails.userProfile?.name || selectedUserDetails.userEmail}
+              userName={getName(selectedUserDetails.userProfile, selectedUserDetails.fullProfile)}
               onClose={() => setShowReportModal(false)}
               onSuccess={handleReportSuccess}
             />
@@ -468,249 +475,181 @@ function UserDetailsModal({
   onClose, 
   formatDate,
   loadingDetails,
-  getFirstName,
+  getName,
   onReport
 }: { 
   match: UserDetailProfile, 
   onClose: () => void,
   formatDate: (date: string) => string,
   loadingDetails: boolean,
-  getFirstName: (user: {name?: string; email: string}, fullProfile?: any) => string,
+  getName: (userProfile?: {name?: string}, fullProfile?: any) => string,
   onReport: () => void
 }) {
-  // Get display name
-  const displayName = getFirstName(match.userProfile, match.fullProfile);
+  const [isReporting, setIsReporting] = useState(false);
+
+  if (loadingDetails) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full mx-auto shadow-xl">
+          <div className="p-8 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+            <p className="mt-4 text-gray-600 dark:text-gray-300">Loading user details...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-10 p-4">
-      <div className="bg-gray-50 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-xl">
-        <div className="flex items-center justify-between border-b p-4">
-          <div className="flex items-center">
-            {match.userProfile.image ? (
-              <Image 
-                src={match.userProfile.image} 
-                alt={displayName} 
-                width={40} 
-                height={40} 
-                className="rounded-full border-2 border-white shadow mr-3" 
-              />
-            ) : (
-              <div className="w-[40px] h-[40px] bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow mr-3">
-                <span className="text-white font-semibold">{displayName[0]}</span>
-              </div>
-            )}
-            <h2 className="text-xl font-semibold text-gray-900">{displayName}</h2>
-          </div>
-          
-          <div className="flex items-center gap-3">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full mx-auto shadow-xl">
+        <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <span>{getName(match.userProfile, match.fullProfile)}'s Profile</span>
+          </h2>
+          <div className="flex items-center gap-4">
             <button
-              className="px-3 py-1.5 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-              onClick={onReport}
+              onClick={() => setIsReporting(true)}
+              className="text-red-500 hover:text-red-600 dark:hover:text-red-400 flex items-center"
+              aria-label="Report user"
             >
-              Report User
+              <FiFlag className="mr-1" />
+              <span className="text-sm">Report</span>
             </button>
-            <button 
-              className="text-gray-500 hover:text-gray-700 transition-colors"
+            <button
               onClick={onClose}
-              aria-label="Close"
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100"
+              aria-label="Close modal"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <FiX size={24} />
             </button>
           </div>
         </div>
         
-        <div className="overflow-y-auto p-5" style={{ maxHeight: 'calc(90vh - 70px)' }}>
-          {loadingDetails ? (
-            <div className="py-10 text-center">
-              <div className="animate-pulse text-gray-600">Loading user details...</div>
-            </div>
-          ) : match.fullProfile ? (
-            <div className="space-y-6">
-              {/* Compatibility Score section */}
-              <div className="bg-white rounded-lg shadow-sm mb-6">
-                <div className="bg-indigo-50 px-5 py-3 rounded-t-lg">
-                  <h3 className="text-lg font-semibold text-indigo-900">
-                    Compatibility Score: {match.score.toFixed(1)}%
-                  </h3>
+        <div className="p-6">
+          {match.fullProfile ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Left column: Basic Information, Location, Housing Details */}
+              <div className="space-y-6">
+                {/* Basic Information */}
+                <div>
+                  <div className="flex items-center mb-3">
+                    <span className="text-indigo-600 dark:text-indigo-400 mr-2">
+                      <FiUsers className="inline" />
+                    </span>
+                    <h3 className="text-gray-900 dark:text-gray-100 font-medium">Basic Information</h3>
+                  </div>
+                  <div className="bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600">
+                    <div className="grid grid-cols-[1fr_auto] gap-y-2 p-4">
+                      <div className="text-gray-600 dark:text-gray-300">First Name:</div>
+                      <div className="text-right dark:text-gray-200">{match.fullProfile.firstName || 'Not specified'}</div>
+                      
+                      <div className="text-gray-600 dark:text-gray-300">Gender:</div>
+                      <div className="text-right dark:text-gray-200">{match.fullProfile.gender || 'Not specified'}</div>
+                      
+                      <div className="text-gray-600 dark:text-gray-300">Room with Different Gender:</div>
+                      <div className="text-right dark:text-gray-200">{match.fullProfile.roomWithDifferentGender ? 'Yes' : 'No'}</div>
+                      
+                      <div className="text-gray-600 dark:text-gray-300">Internship Company:</div>
+                      <div className="text-right dark:text-gray-200">{match.fullProfile.internshipCompany || 'Not specified'}</div>
+                      
+                      <div className="text-gray-600 dark:text-gray-300">Desired Roommates:</div>
+                      <div className="text-right dark:text-gray-200">{match.fullProfile.desiredRoommates || 'Not specified'}</div>
+                    </div>
+                  </div>
                 </div>
                 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4">
-                  <div className="bg-white">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-gray-600 flex items-center text-sm font-medium">
-                        <FiHome className="mr-1.5" /> Location
-                      </span>
-                      <span className="text-indigo-700 font-semibold">{match.compatibilityDetails.locationScore.toFixed(1)}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5">
-                      <div className="bg-indigo-600 h-1.5 rounded-full" style={{ width: `${match.compatibilityDetails.locationScore}%` }}></div>
+                {/* Location */}
+                <div>
+                  <div className="flex items-center mb-3">
+                    <span className="text-indigo-600 dark:text-indigo-400 mr-2">
+                      <FiMapPin className="inline" />
+                    </span>
+                    <h3 className="text-gray-900 dark:text-gray-100 font-medium">Location</h3>
+                  </div>
+                  <div className="bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600">
+                    <div className="grid grid-cols-[1fr_auto] gap-y-2 p-4">
+                      <div className="text-gray-600 dark:text-gray-300">Region:</div>
+                      <div className="text-right dark:text-gray-200">{match.fullProfile.housingRegion || 'Not specified'}</div>
+                      
+                      <div className="text-gray-600 dark:text-gray-300">Preferred Cities:</div>
+                      <div className="text-right dark:text-gray-200">{match.fullProfile.housingCities?.join(', ') || 'Not specified'}</div>
                     </div>
                   </div>
-                  
-                  <div className="bg-white">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-gray-600 flex items-center text-sm font-medium">
-                        <FiDollarSign className="mr-1.5" /> Budget
-                      </span>
-                      <span className="text-indigo-700 font-semibold">{match.compatibilityDetails.budgetScore.toFixed(1)}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5">
-                      <div className="bg-indigo-600 h-1.5 rounded-full" style={{ width: `${match.compatibilityDetails.budgetScore}%` }}></div>
-                    </div>
+                </div>
+                
+                {/* Housing Details */}
+                <div>
+                  <div className="flex items-center mb-3">
+                    <span className="text-indigo-600 dark:text-indigo-400 mr-2">
+                      <FiCalendar className="inline" />
+                    </span>
+                    <h3 className="text-gray-900 dark:text-gray-100 font-medium">Housing Details</h3>
                   </div>
-                  
-                  <div className="bg-white">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-gray-600 flex items-center text-sm font-medium">
-                        <FiCalendar className="mr-1.5" /> Timing
-                      </span>
-                      <span className="text-indigo-700 font-semibold">{match.compatibilityDetails.timingScore.toFixed(1)}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5">
-                      <div className="bg-indigo-600 h-1.5 rounded-full" style={{ width: `${match.compatibilityDetails.timingScore}%` }}></div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-white">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-gray-600 flex items-center text-sm font-medium">
-                        <FiList className="mr-1.5" /> Preferences
-                      </span>
-                      <span className="text-indigo-700 font-semibold">{match.compatibilityDetails.preferencesScore.toFixed(1)}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5">
-                      <div className="bg-indigo-600 h-1.5 rounded-full" style={{ width: `${match.compatibilityDetails.preferencesScore}%` }}></div>
+                  <div className="bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600">
+                    <div className="grid grid-cols-[1fr_auto] gap-y-2 p-4">
+                      <div className="text-gray-600 dark:text-gray-300">Housing Start:</div>
+                      <div className="text-right dark:text-gray-200">{match.fullProfile.internshipStartDate ? formatDate(match.fullProfile.internshipStartDate) : 'Not specified'}</div>
+                      
+                      <div className="text-gray-600 dark:text-gray-300">Housing End:</div>
+                      <div className="text-right dark:text-gray-200">{match.fullProfile.internshipEndDate ? formatDate(match.fullProfile.internshipEndDate) : 'Not specified'}</div>
+                      
+                      <div className="text-gray-600 dark:text-gray-300">Monthly Budget:</div>
+                      <div className="text-right dark:text-gray-200">${match.fullProfile.minBudget?.toLocaleString() || '0'} - ${match.fullProfile.maxBudget?.toLocaleString() || '0'}</div>
                     </div>
                   </div>
                 </div>
               </div>
               
-              {/* Main content with user information */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Left column: Basic Information, Location, Housing Details */}
-                <div className="space-y-6">
-                  {/* Basic Information */}
-                  <div>
-                    <div className="flex items-center mb-3">
-                      <span className="text-indigo-600 mr-2">
-                        <FiUsers className="inline" />
-                      </span>
-                      <h3 className="text-gray-900 font-medium">Basic Information</h3>
-                    </div>
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                      <div className="grid grid-cols-[1fr_auto] gap-y-2 p-4">
-                        <div className="text-gray-600">First Name:</div>
-                        <div className="text-right">{match.fullProfile.firstName || 'Not specified'}</div>
-                        
-                        <div className="text-gray-600">Gender:</div>
-                        <div className="text-right">{match.fullProfile.gender || 'Not specified'}</div>
-                        
-                        <div className="text-gray-600">Room with Different Gender:</div>
-                        <div className="text-right">{match.fullProfile.roomWithDifferentGender ? 'Yes' : 'No'}</div>
-                        
-                        <div className="text-gray-600">Internship Company:</div>
-                        <div className="text-right">{match.fullProfile.internshipCompany || 'Not specified'}</div>
-                        
-                        <div className="text-gray-600">Desired Roommates:</div>
-                        <div className="text-right">{match.fullProfile.desiredRoommates || 'Not specified'}</div>
-                      </div>
-                    </div>
+              {/* Right column: Preferences and Additional Notes */}
+              <div className="space-y-6">
+                {/* Preferences - Always display this section */}
+                <div>
+                  <div className="flex items-center mb-3">
+                    <span className="text-indigo-600 dark:text-indigo-400 mr-2">
+                      <FiList className="inline" />
+                    </span>
+                    <h3 className="text-gray-900 dark:text-gray-100 font-medium">Preferences</h3>
                   </div>
-                  
-                  {/* Location */}
-                  <div>
-                    <div className="flex items-center mb-3">
-                      <span className="text-indigo-600 mr-2">
-                        <FiHome className="inline" />
-                      </span>
-                      <h3 className="text-gray-900 font-medium">Location</h3>
-                    </div>
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                      <div className="grid grid-cols-[1fr_auto] gap-y-2 p-4">
-                        <div className="text-gray-600">Region:</div>
-                        <div className="text-right">{match.fullProfile.housingRegion || 'Not specified'}</div>
-                        
-                        <div className="text-gray-600">Preferred Cities:</div>
-                        <div className="text-right">{match.fullProfile.housingCities?.join(', ') || 'Not specified'}</div>
+                  <div className="bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-4">
+                    {match.fullProfile.preferences && match.fullProfile.preferences.length > 0 ? (
+                      <div className="space-y-2">
+                        {match.fullProfile.preferences.map((pref, index) => (
+                          <div key={index} className="flex justify-between items-center py-1">
+                            <span className="dark:text-gray-200">{pref.item}</span>
+                            <span className="text-xs bg-gray-100 dark:bg-gray-600 dark:text-gray-200 px-2 py-0.5 rounded">{pref.strength}</span>
+                          </div>
+                        ))}
                       </div>
-                    </div>
-                  </div>
-                  
-                  {/* Housing Details */}
-                  <div>
-                    <div className="flex items-center mb-3">
-                      <span className="text-indigo-600 mr-2">
-                        <FiCalendar className="inline" />
-                      </span>
-                      <h3 className="text-gray-900 font-medium">Housing Details</h3>
-                    </div>
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                      <div className="grid grid-cols-[1fr_auto] gap-y-2 p-4">
-                        <div className="text-gray-600">Housing Start:</div>
-                        <div className="text-right">{match.fullProfile.internshipStartDate ? formatDate(match.fullProfile.internshipStartDate) : 'Not specified'}</div>
-                        
-                        <div className="text-gray-600">Housing End:</div>
-                        <div className="text-right">{match.fullProfile.internshipEndDate ? formatDate(match.fullProfile.internshipEndDate) : 'Not specified'}</div>
-                        
-                        <div className="text-gray-600">Monthly Budget:</div>
-                        <div className="text-right">${match.fullProfile.minBudget?.toLocaleString() || '0'} - ${match.fullProfile.maxBudget?.toLocaleString() || '0'}</div>
-                      </div>
-                    </div>
+                    ) : (
+                      <p className="text-gray-500 dark:text-gray-400">No preferences specified</p>
+                    )}
                   </div>
                 </div>
                 
-                {/* Right column: Preferences and Additional Notes */}
-                <div className="space-y-6">
-                  {/* Preferences - Always display this section */}
-                  <div>
-                    <div className="flex items-center mb-3">
-                      <span className="text-indigo-600 mr-2">
-                        <FiList className="inline" />
-                      </span>
-                      <h3 className="text-gray-900 font-medium">Preferences</h3>
-                    </div>
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                      {match.fullProfile.preferences && match.fullProfile.preferences.length > 0 ? (
-                        <div className="space-y-2">
-                          {match.fullProfile.preferences.map((pref, index) => (
-                            <div key={index} className="flex justify-between items-center py-1">
-                              <span>{pref.item}</span>
-                              <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{pref.strength}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-gray-500">No preferences specified</p>
-                      )}
-                    </div>
+                {/* Additional Notes - Always display this section */}
+                <div>
+                  <div className="flex items-center mb-3">
+                    <span className="text-indigo-600 dark:text-indigo-400 mr-2">
+                      <FiStar className="inline" />
+                    </span>
+                    <h3 className="text-gray-900 dark:text-gray-100 font-medium">Additional Notes</h3>
                   </div>
-                  
-                  {/* Additional Notes - Always display this section */}
-                  <div>
-                    <div className="flex items-center mb-3">
-                      <span className="text-indigo-600 mr-2">
-                        <FiStar className="inline" />
-                      </span>
-                      <h3 className="text-gray-900 font-medium">Additional Notes</h3>
-                    </div>
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                      <div className="max-h-[200px] overflow-y-auto">
-                        {match.fullProfile.additionalNotes ? (
-                          <p className="text-gray-700 whitespace-pre-wrap break-words">{match.fullProfile.additionalNotes}</p>
-                        ) : (
-                          <p className="text-gray-500">Not specified</p>
-                        )}
-                      </div>
+                  <div className="bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-4">
+                    <div className="max-h-[200px] overflow-y-auto">
+                      {match.fullProfile.additionalNotes ? (
+                        <p className="text-gray-700 dark:text-gray-200 whitespace-pre-wrap break-words">{match.fullProfile.additionalNotes}</p>
+                      ) : (
+                        <p className="text-gray-500 dark:text-gray-400">Not specified</p>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="bg-yellow-50 p-5 rounded-xl text-center border border-yellow-200">
-              <p>Limited information available. Contact this user for more details.</p>
+            <div className="text-center p-6 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+              <p className="text-yellow-800 dark:text-yellow-200">User information is unavailable</p>
             </div>
           )}
         </div>

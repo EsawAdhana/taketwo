@@ -47,6 +47,9 @@ export async function POST(req: NextRequest) {
     // Remove _id from data if it exists
     const { _id, ...surveyData } = data;
     
+    // Extract name for user update (assuming it comes as 'firstName' from survey)
+    const nameFromSurvey = surveyData.firstName; 
+    
     // Update or insert survey data
     await db.collection('surveys').updateOne(
       { userEmail: session.user.email },
@@ -59,6 +62,19 @@ export async function POST(req: NextRequest) {
       },
       { upsert: true }
     );
+    
+    // Also update the user's name in the users collection
+    if (nameFromSurvey) { // Only update if name is provided
+      await db.collection('users').updateOne(
+        { email: session.user.email }, // Find user by email
+        {
+          $set: {
+            name: nameFromSurvey, // Update the main name field
+            updatedAt: new Date() // Optionally update a timestamp here too
+          }
+        }
+      );
+    }
     
     return NextResponse.json({ success: true });
   } catch (error) {

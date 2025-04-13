@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import MultiPageSurvey from '@/components/survey/MultiPageSurvey';
 
 interface User {
   email: string;
@@ -65,6 +66,7 @@ export default function TestingPage() {
   // New states for custom user creation
   const [showCustomUserForm, setShowCustomUserForm] = useState(false);
   const [addingCustomUser, setAddingCustomUser] = useState(false);
+  const [showSurveyModal, setShowSurveyModal] = useState(false);
   const [customUserData, setCustomUserData] = useState({
     name: '',
     email: '',
@@ -130,9 +132,6 @@ export default function TestingPage() {
       
       if (data.users) {
         setTestUsers(data.users);
-        if (data.users.length === 0) {
-          setError('No test users found. They might exist in the database but couldn\'t be retrieved.');
-        }
       } else {
         setError(`Error: ${data.error || 'Unknown error fetching test users'}`);
       }
@@ -605,84 +604,94 @@ export default function TestingPage() {
     }
   };
   
-  // Function to handle custom user submission
-  const addCustomUser = async () => {
+  // Handle survey submission
+  const handleSurveySubmit = (surveyData: any) => {
+    // Extract the form data from the survey component
+    // and merge it with our custom user data
+    setAddingCustomUser(true);
+    setError(null);
+    setSuccess(null);
+    
     if (!customUserData.name || !customUserData.email) {
       setError('Name and email are required for custom test users');
+      setAddingCustomUser(false);
       return;
     }
     
     try {
-      setAddingCustomUser(true);
-      setError(null);
-      setSuccess(null);
+      // Prepare the data for submission - merge the survey data with our custom user data
+      const mergedData = {
+        ...surveyData,
+        name: customUserData.name,
+        email: customUserData.email,
+        numCopies: customUserData.numCopies
+      };
       
-      // Set default dates if not provided
-      const userData = { ...customUserData };
-      if (!userData.internshipStartDate) {
-        userData.internshipStartDate = new Date().toISOString().split('T')[0];
-      }
-      if (!userData.internshipEndDate) {
-        const endDate = new Date();
-        endDate.setMonth(endDate.getMonth() + 3);
-        userData.internshipEndDate = endDate.toISOString().split('T')[0];
-      }
-      
-      const response = await fetch('/api/testing/add-custom-user', {
+      // Submit the data
+      fetch('/api/testing/add-custom-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(userData),
+        body: JSON.stringify(mergedData),
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.text().then(text => {
+            throw new Error(`Failed to add custom test user: ${response.status} ${response.statusText} - ${text}`);
+          });
+        }
+        return response.json();
+      })
+      .then(data => {
+        if (data.success) {
+          setSuccess(data.message || 'Custom test user added successfully');
+          
+          // Reset the form
+          setCustomUserData({
+            name: '',
+            email: '',
+            gender: 'Male',
+            roomWithDifferentGender: false,
+            housingRegion: 'Bay Area',
+            housingCities: ['San Francisco'],
+            internshipCompany: '',
+            internshipStartDate: '',
+            internshipEndDate: '',
+            desiredRoommates: '2',
+            minBudget: 1500,
+            maxBudget: 2500,
+            additionalNotes: '',
+            preferences: [
+              { item: "Okay with pets", strength: "neutral" },
+              { item: "Okay with alcohol", strength: "neutral" },
+              { item: "Okay with parties", strength: "neutral" },
+              { item: "Okay with visitors", strength: "neutral" },
+              { item: "Okay with visitors staying overnight", strength: "neutral" },
+              { item: "LGBTQ+/Ally", strength: "neutral" },
+            ],
+            numCopies: 1
+          });
+          
+          // Refresh the test users list
+          fetchDebugInfo();
+          fetchTestUsers();
+          setShowCustomUserForm(false);
+          setShowSurveyModal(false);
+        } else {
+          setError(`Error adding custom test user: ${data.error || 'Unknown error'}`);
+        }
+      })
+      .catch(error => {
+        console.error('Error adding custom test user:', error);
+        setError(`Error adding custom test user: ${error instanceof Error ? error.message : String(error)}`);
+      })
+      .finally(() => {
+        setAddingCustomUser(false);
       });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to add custom test user: ${response.status} ${response.statusText} - ${errorText}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        setSuccess(data.message || 'Custom test user added successfully');
-        
-        // Reset the form
-        setCustomUserData({
-          name: '',
-          email: '',
-          gender: 'Male',
-          roomWithDifferentGender: false,
-          housingRegion: 'Bay Area',
-          housingCities: ['San Francisco'],
-          internshipCompany: '',
-          internshipStartDate: '',
-          internshipEndDate: '',
-          desiredRoommates: '2',
-          minBudget: 1500,
-          maxBudget: 2500,
-          additionalNotes: '',
-          preferences: [
-            { item: "Okay with pets", strength: "neutral" },
-            { item: "Okay with alcohol", strength: "neutral" },
-            { item: "Okay with parties", strength: "neutral" },
-            { item: "Okay with visitors", strength: "neutral" },
-            { item: "Okay with visitors staying overnight", strength: "neutral" },
-            { item: "LGBTQ+/Ally", strength: "neutral" },
-          ],
-          numCopies: 1
-        });
-        
-        // Refresh the test users list
-        fetchDebugInfo();
-        fetchTestUsers();
-        setShowCustomUserForm(false);
-      } else {
-        setError(`Error adding custom test user: ${data.error || 'Unknown error'}`);
-      }
     } catch (error) {
-      console.error('Error adding custom test user:', error);
-      setError(`Error adding custom test user: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
+      console.error('Error processing survey data:', error);
+      setError(`Error processing survey data: ${error instanceof Error ? error.message : String(error)}`);
       setAddingCustomUser(false);
     }
   };
@@ -827,10 +836,10 @@ export default function TestingPage() {
           
           <div className="flex items-end">
             <button
-              onClick={() => setShowCustomUserForm(!showCustomUserForm)}
+              onClick={() => setShowSurveyModal(true)}
               className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded"
             >
-              {showCustomUserForm ? 'Hide Custom Form' : 'Add Custom Test User'}
+              Add Custom Test User
             </button>
           </div>
           
@@ -845,8 +854,76 @@ export default function TestingPage() {
           </div>
         </div>
         
-        {/* Custom user form - remove dark mode styles */}
-        {showCustomUserForm && (
+        {/* Survey Modal */}
+        {showSurveyModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-screen overflow-y-auto">
+              <div className="p-4 border-b flex justify-between items-center">
+                <h3 className="text-xl font-semibold">Create Test User</h3>
+                <div className="flex items-center gap-4">
+                  <div className="flex flex-col">
+                    <label className="block text-sm font-medium mb-1">
+                      Name*
+                    </label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={customUserData.name}
+                      onChange={handleCustomUserInputChange}
+                      className="border border-gray-300 rounded p-2"
+                      required
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <label className="block text-sm font-medium mb-1">
+                      Email*
+                    </label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={customUserData.email}
+                      onChange={handleCustomUserInputChange}
+                      className="border border-gray-300 rounded p-2"
+                      required
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <label className="block text-sm font-medium mb-1">
+                      Copies
+                    </label>
+                    <input
+                      type="number"
+                      name="numCopies"
+                      min="1"
+                      max="100"
+                      value={customUserData.numCopies}
+                      onChange={handleCustomUserInputChange}
+                      className="border border-gray-300 rounded p-2 w-20"
+                    />
+                  </div>
+                  <button 
+                    onClick={() => setShowSurveyModal(false)}
+                    className="text-gray-500 hover:text-gray-700 ml-4"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              <div className="p-4">
+                <MultiPageSurvey 
+                  onSubmitSuccess={(formData) => {
+                    handleSurveySubmit(formData);
+                  }}
+                  isEditing={false}
+                  isTestMode={true}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Custom user form - only show when not using survey modal */}
+        {showCustomUserForm && !showSurveyModal && (
           <div className="bg-gray-100 p-4 rounded-lg mb-6">
             <h3 className="text-lg font-semibold mb-3 text-gray-800">Add Custom Test User</h3>
             
@@ -987,7 +1064,7 @@ export default function TestingPage() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Min Budget ($)
+                  Min Rent ($)
                 </label>
                 <input
                   type="number"
@@ -1002,7 +1079,7 @@ export default function TestingPage() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Max Budget ($)
+                  Max Rent ($)
                 </label>
                 <input
                   type="number"
@@ -1080,7 +1157,9 @@ export default function TestingPage() {
             
             <div className="flex justify-end">
               <button
-                onClick={addCustomUser}
+                onClick={() => {
+                  handleSurveySubmit(customUserData);
+                }}
                 disabled={addingCustomUser || !customUserData.name || !customUserData.email}
                 className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded disabled:bg-green-400"
               >
@@ -1316,7 +1395,7 @@ export default function TestingPage() {
                         <p><strong>Housing Start:</strong> {formatDate(selectedUserDetails.centralUser.surveyData.internshipStartDate)}</p>
                         <p><strong>Housing End:</strong> {formatDate(selectedUserDetails.centralUser.surveyData.internshipEndDate)}</p>
                         <p><strong>Desired Roommates:</strong> {selectedUserDetails.centralUser.surveyData.desiredRoommates || 'N/A'}</p>
-                        <p><strong>Monthly Budget:</strong> ${selectedUserDetails.centralUser.surveyData.minBudget?.toLocaleString() || 'N/A'} - ${selectedUserDetails.centralUser.surveyData.maxBudget?.toLocaleString() || 'N/A'}</p>
+                        <p><strong>Monthly Rent:</strong> ${selectedUserDetails.centralUser.surveyData.minBudget?.toLocaleString() || 'N/A'} - ${selectedUserDetails.centralUser.surveyData.maxBudget?.toLocaleString() || 'N/A'}</p>
                       </div>
                       
                       <div>
@@ -1356,7 +1435,7 @@ export default function TestingPage() {
                         <p><strong>Housing Start:</strong> {formatDate(selectedUserDetails.user.surveyData.internshipStartDate)}</p>
                         <p><strong>Housing End:</strong> {formatDate(selectedUserDetails.user.surveyData.internshipEndDate)}</p>
                         <p><strong>Desired Roommates:</strong> {selectedUserDetails.user.surveyData.desiredRoommates || 'N/A'}</p>
-                        <p><strong>Monthly Budget:</strong> ${selectedUserDetails.user.surveyData.minBudget?.toLocaleString() || 'N/A'} - ${selectedUserDetails.user.surveyData.maxBudget?.toLocaleString() || 'N/A'}</p>
+                        <p><strong>Monthly Rent:</strong> ${selectedUserDetails.user.surveyData.minBudget?.toLocaleString() || 'N/A'} - ${selectedUserDetails.user.surveyData.maxBudget?.toLocaleString() || 'N/A'}</p>
                       </div>
                       
                       <div>
@@ -1465,7 +1544,7 @@ export default function TestingPage() {
                     <p><strong>Housing Start:</strong> {formatDate(selectedUserDetails.user.surveyData.internshipStartDate)}</p>
                     <p><strong>Housing End:</strong> {formatDate(selectedUserDetails.user.surveyData.internshipEndDate)}</p>
                     <p><strong>Desired Roommates:</strong> {selectedUserDetails.user.surveyData.desiredRoommates || 'N/A'}</p>
-                    <p><strong>Monthly Budget:</strong> ${selectedUserDetails.user.surveyData.minBudget?.toLocaleString() || 'N/A'} - ${selectedUserDetails.user.surveyData.maxBudget?.toLocaleString() || 'N/A'}</p>
+                    <p><strong>Monthly Rent:</strong> ${selectedUserDetails.user.surveyData.minBudget?.toLocaleString() || 'N/A'} - ${selectedUserDetails.user.surveyData.maxBudget?.toLocaleString() || 'N/A'}</p>
                   </div>
                   
                   <div>

@@ -53,16 +53,16 @@ export default function ReportUserModal({ userEmail, userName, onClose, onSucces
   
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg max-w-md w-full mx-4 overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-lg max-w-md w-full mx-4 overflow-hidden">
         <div className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center">
               <FiAlertTriangle className="text-red-500 mr-2" />
               Report User
             </h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-500 text-xl"
+              className="text-gray-400 hover:text-gray-500 dark:text-gray-300 dark:hover:text-gray-200 text-xl"
             >
               ×
             </button>
@@ -70,19 +70,19 @@ export default function ReportUserModal({ userEmail, userName, onClose, onSucces
           
           <form onSubmit={handleSubmit}>
             <div className="mb-4">
-              <p className="text-gray-600">
+              <p className="text-gray-600 dark:text-gray-300">
                 You are about to report <span className="font-medium">{userName}</span>
               </p>
             </div>
             
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                 Reason for reporting *
               </label>
               <select
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                className="w-full border border-gray-300 rounded-md p-2"
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-md p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 required
               >
                 <option value="">Select a reason</option>
@@ -95,13 +95,13 @@ export default function ReportUserModal({ userEmail, userName, onClose, onSucces
             </div>
             
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                 Additional Details
               </label>
               <textarea
                 value={details}
                 onChange={(e) => setDetails(e.target.value)}
-                className="w-full border border-gray-300 rounded-md p-2"
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-md p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 rows={4}
                 placeholder="Please provide any additional details about the incident..."
               />

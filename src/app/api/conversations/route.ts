@@ -97,9 +97,8 @@ export async function POST(req: Request) {
     // Ensure the current user is included in participants
     let filteredParticipants = [...participants];
     
-    if (!filteredParticipants.includes(currentUserId)) {
-      filteredParticipants.push(currentUserId);
-    }
+    // Deduplicate participants
+    filteredParticipants = [...new Set(filteredParticipants)];
     
     // Look up users by email if the ID is not a valid ObjectId
     const validParticipants = await Promise.all(filteredParticipants.map(async (id) => {

@@ -56,7 +56,7 @@ export async function GET(req: Request) {
       createdAt: { $gt: new Date(lastMessageTimestamp) }
     })
       .sort({ createdAt: 1 })
-      .populate('senderId', 'name image')
+      .populate('senderId', 'name firstName image')
       .populate('readBy', 'name image');
 
     return NextResponse.json({ success: true, data: newMessages });

@@ -3,6 +3,8 @@ import { Inter } from 'next/font/google';
 import { getServerSession } from 'next-auth';
 import SessionProvider from '@/components/SessionProvider';
 import Navigation from '@/components/Navigation';
+import { ThemeProvider } from '@/components/ThemeProvider';
+import { SurveyNavigationProvider } from '@/contexts/SurveyNavigationContext';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -22,10 +24,14 @@ export default async function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <SessionProvider session={session}>
-          <div className="relative min-h-screen">
-            {session && <Navigation />}
-            {children}
-          </div>
+          <ThemeProvider>
+            <SurveyNavigationProvider>
+              <div className="relative min-h-screen dark:bg-gray-900 dark:text-white">
+                {session && <Navigation />}
+                {children}
+              </div>
+            </SurveyNavigationProvider>
+          </ThemeProvider>
         </SessionProvider>
       </body>
     </html>

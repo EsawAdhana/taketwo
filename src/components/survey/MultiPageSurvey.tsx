@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { HOUSING_REGIONS, NON_NEGOTIABLES, SurveyFormData, INITIAL_FORM_DATA, Preference } from '@/constants/survey-constants';
 import { useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
+import { useSurveyNavigation } from '@/contexts/SurveyNavigationContext';
 
 // Page components
 import BasicInfoPage from './pages/BasicInfoPage';
@@ -12,24 +14,89 @@ import TimingBudgetPage from './pages/TimingBudgetPage';
 import PreferencesPage from './pages/PreferencesPage';
 
 interface MultiPageSurveyProps {
-  onSubmitSuccess?: () => void;
+  onSubmitSuccess?: (formData: SurveyFormData) => void;
   isEditing?: boolean;
+  isTestMode?: boolean;
 }
 
-export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: MultiPageSurveyProps) {
+export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false, isTestMode = false }: MultiPageSurveyProps) {
   const { data: session } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
+  const { setShowWarningOnNavigation, setHasUnsavedChanges } = useSurveyNavigation();
   
   const [formData, setFormData] = useState<SurveyFormData>(INITIAL_FORM_DATA);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [originalData, setOriginalData] = useState<SurveyFormData | null>(null);
+  const [hasDateError, setHasDateError] = useState(false);
+  
+  // Enable navigation warnings if editing or if there are unsaved changes
+  useEffect(() => {
+    if (isEditing) {
+      setShowWarningOnNavigation(true);
+    }
+    
+    return () => {
+      setShowWarningOnNavigation(false);
+      setHasUnsavedChanges(false);
+    };
+  }, [isEditing, setShowWarningOnNavigation, setHasUnsavedChanges]);
+  
+  // Track form changes against original data to detect unsaved changes
+  useEffect(() => {
+    if (!originalData || loading) return;
+    
+    // Helper function to compare objects and detect significant changes
+    const hasMeaningfulChanges = () => {
+      // Skip comparing currentPage and other UI-related fields
+      const compareFields = (obj1: any, obj2: any, ignoredFields = ['currentPage']) => {
+        for (const key in obj1) {
+          if (ignoredFields.includes(key)) continue;
+          
+          // Handle arrays specially (like preferences, housingCities)
+          if (Array.isArray(obj1[key]) && Array.isArray(obj2[key])) {
+            // For simple arrays, JSON.stringify is sufficient
+            if (JSON.stringify(obj1[key]) !== JSON.stringify(obj2[key])) {
+              return true;
+            }
+          } 
+          // Handle nested objects
+          else if (typeof obj1[key] === 'object' && obj1[key] !== null && 
+                  typeof obj2[key] === 'object' && obj2[key] !== null) {
+            if (compareFields(obj1[key], obj2[key])) {
+              return true;
+            }
+          }
+          // Handle primitive values
+          else if (obj1[key] !== obj2[key]) {
+            return true;
+          }
+        }
+        return false;
+      };
+      
+      return compareFields(formData, originalData) || compareFields(originalData, formData);
+    };
+    
+    // Detect if there are unsaved changes
+    const hasChanges = hasMeaningfulChanges();
+    console.log('Detected form changes:', hasChanges);
+    setHasUnsavedChanges(hasChanges);
+    
+  }, [formData, originalData, loading, setHasUnsavedChanges]);
   
   // Fetch existing survey data
   useEffect(() => {
     const fetchSurvey = async () => {
       if (!session) return;
+      
+      // Skip fetching previous data if we're in test mode
+      if (isTestMode) {
+        setLoading(false);
+        return;
+      }
       
       try {
         const response = await fetch('/api/survey');
@@ -67,7 +134,7 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
     };
     
     fetchSurvey();
-  }, [session, isEditing]);
+  }, [session, isEditing, isTestMode]);
   
   // Save form data
   const saveSurvey = async (finalSubmit = false) => {
@@ -99,6 +166,14 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
       const result = await response.json();
       
       if (response.ok) {
+        // Reset unsaved changes flag after successful save
+        if (finalSubmit) {
+          setHasUnsavedChanges(false);
+        }
+        
+        // Update originalData to match current data after successful save
+        setOriginalData({...formData});
+        
         // Double-check that isSubmitted is set properly
         if (finalSubmit) {
           // Make another request to check the status
@@ -141,7 +216,7 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
   const canProceed = () => {
     switch (formData.currentPage) {
       case 1:
-        return !!formData.gender;
+        return !!formData.firstName && !!formData.firstName.trim() && !!formData.gender;
       case 2:
         return !!formData.housingRegion && formData.housingCities.length > 0;
       case 3:
@@ -149,7 +224,8 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
                !!formData.internshipEndDate && 
                !!formData.desiredRoommates && 
                formData.minBudget >= 500 &&
-               formData.maxBudget >= formData.minBudget;
+               formData.maxBudget >= formData.minBudget &&
+               !hasDateError;
       case 4:
         return true;
       default:
@@ -174,6 +250,14 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
   };
   
   const handleSubmit = async () => {
+    if (isTestMode) {
+      // In test mode, pass the form data to onSubmitSuccess
+      if (onSubmitSuccess) {
+        onSubmitSuccess(formData);
+      }
+      return;
+    }
+    
     const success = await saveSurvey(true);
     if (success) {
       setShowCompletionModal(true);
@@ -183,7 +267,7 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
   const handleGoToDashboard = () => {
     setShowCompletionModal(false);
     if (onSubmitSuccess) {
-      onSubmitSuccess();
+      onSubmitSuccess(formData);
     } else {
       // Fallback if onSubmitSuccess is not provided
       router.push('/dashboard');
@@ -196,7 +280,7 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
   };
   
   if (loading) {
-    return <div className="py-4 text-center text-gray-800">Loading survey...</div>;
+    return <div className="py-4 text-center text-gray-800 dark:text-gray-200">Loading survey...</div>;
   }
   
   return (
@@ -204,12 +288,12 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
       {/* Completion Modal */}
       {showCompletionModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4 text-center">
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full mx-4 text-center">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
               Survey Completed!
             </h3>
-            <p className="text-gray-600 mb-6">
-              Thank you for completing the survey. You can always update your preferences later by accessing the "Survey" tab.
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              Thank you for completing the survey. You can update your preferences with the "Survey" tab.
             </p>
             <button
               onClick={handleGoToDashboard}
@@ -229,17 +313,17 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
               key={step}
               className={`flex-1 text-center ${
                 index + 1 === formData.currentPage
-                  ? 'text-blue-600 font-semibold'
+                  ? 'text-blue-600 dark:text-blue-400 font-semibold'
                   : index + 1 < formData.currentPage
-                  ? 'text-green-600'
-                  : 'text-gray-400'
+                  ? 'text-green-600 dark:text-green-400'
+                  : 'text-gray-400 dark:text-gray-500'
               }`}
             >
               {step}
             </div>
           ))}
         </div>
-        <div className="h-2 flex rounded-full bg-gray-200">
+        <div className="h-2 flex rounded-full bg-gray-200 dark:bg-gray-700">
           {[1, 2, 3, 4].map((step) => (
             <div
               key={step}
@@ -256,7 +340,7 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
       </div>
       
       {/* Form Pages */}
-      <div className="bg-white rounded-lg p-6 shadow-lg">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg">
         <form onSubmit={(e) => e.preventDefault()}>
           {formData.currentPage === 1 && (
             <BasicInfoPage
@@ -276,6 +360,7 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
             <TimingBudgetPage
               formData={formData}
               setFormData={setFormData}
+              setHasDateError={setHasDateError}
             />
           )}
           
@@ -292,7 +377,7 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
               type="button"
               onClick={handleBack}
               disabled={formData.currentPage === 1 || saving}
-              className="px-4 py-2 text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50"
+              className="px-4 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
             >
               Back
             </button>
@@ -301,8 +386,19 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
               {isEditing && (
                 <button
                   type="button"
-                  onClick={() => router.push('/dashboard')}
-                  className="px-4 py-2 text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200"
+                  onClick={() => {
+                    // This Cancel button should always navigate away without a warning
+                    // since it has its own confirmation dialog
+                    if (confirm("You have unsaved changes to your survey. Your changes will be lost if you leave without submitting. Do you want to continue?")) {
+                      // Disable navigation warning before leaving
+                      setShowWarningOnNavigation(false); 
+                      setHasUnsavedChanges(false);
+                      
+                      // Navigate away
+                      router.push('/dashboard');
+                    }
+                  }}
+                  className="px-4 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
                 >
                   Cancel
                 </button>
@@ -324,7 +420,7 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false }: 
                   disabled={saving}
                   className="px-4 py-2 text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50"
                 >
-                  {saving ? 'Saving...' : isEditing ? 'Save Changes' : 'Submit Survey'}
+                  {saving ? 'Saving...' : isEditing ? 'Save Changes' : isTestMode ? 'Create Test User' : 'Submit Survey'}
                 </button>
               )}
             </div>

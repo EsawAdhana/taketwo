@@ -8,19 +8,12 @@ const userSchema = new mongoose.Schema({
   },
   name: {
     type: String,
-    required: true,
+    required: false,
+    default: '',
   },
   image: {
     type: String,
     default: '',
-  },
-  firstName: {
-    type: String,
-    required: true,
-  },
-  region: {
-    type: String,
-    required: true,
   },
   createdAt: {
     type: Date,
@@ -35,6 +28,12 @@ const userSchema = new mongoose.Schema({
 // Update the updatedAt timestamp before saving
 userSchema.pre('save', function(next) {
   this.updatedAt = new Date();
+  next();
+});
+
+// Add pre hook for update operations like updateOne
+userSchema.pre('updateOne', function(next) {
+  this.set({ updatedAt: new Date() });
   next();
 });
 
