@@ -7,6 +7,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { FiSettings, FiHome } from 'react-icons/fi';
+import { useMessageNotifications } from '@/contexts/MessageNotificationContext';
 
 interface Participant {
   _id: string;
@@ -33,8 +34,20 @@ export default function MessagesPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [socket, setSocket] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const { refreshUnreadCount, hasUnreadMessages, unreadByConversation } = useMessageNotifications();
+
+  // Custom function to get unread count since the context one isn't working
+  const getUnreadCount = (conversationId: string) => {
+    const conversation = unreadByConversation.find(conv => conv.conversationId === conversationId);
+    return conversation?.unreadCount || 0;
+  };
 
   useEffect(() => {
+    if (!session?.user) return;
+    
+    // Fetch conversations initially
+    fetchConversations();
+    
     // Initialize socket connection
     const initSocket = async () => {
       try {
@@ -44,38 +57,40 @@ export default function MessagesPage() {
           console.error('Failed to initialize Socket.IO server');
           return;
         }
-        
-        // Parse the response to get the socket server information
-        const data = await response.json();
-        console.log('Socket.IO initialization response:', data);
 
-        // Connect to the socket server using the explicit URL
-        // This connects to our separate Socket.IO server on port 3001
-        const socketUrl = process.env.NODE_ENV === 'production' 
-          ? window.location.origin
-          : 'http://localhost:3001';
-          
+        // Connect to the socket server
+        const socketUrl = window.location.origin; // Use same origin to avoid CORS issues
+        
         const socketIo = io(socketUrl, {
-          transports: ['websocket', 'polling']
+          transports: ['websocket', 'polling'],
+          reconnectionAttempts: 5,
+          reconnectionDelay: 1000,
+          forceNew: true,
+          path: '/api/socketio'
         });
         
         setSocket(socketIo);
 
         socketIo.on('connect', () => {
-          console.log('Connected to Socket.IO server', socketIo.id);
+          console.log('Connected to Socket.IO server');
         });
 
         socketIo.on('connect_error', (err) => {
           console.error('Socket.IO connection error:', err);
+          // Try to fetch conversations manually as a fallback
+          fetchConversations();
         });
 
-        socketIo.on('new-message', (message) => {
-          console.log('New message received:', message);
+        socketIo.on('new-message', () => {
+          fetchConversations();
+          refreshUnreadCount();
+        });
+        
+        socketIo.on('messages-read', () => {
           fetchConversations();
         });
 
         return () => {
-          console.log('Disconnecting socket');
           socketIo.disconnect();
         };
       } catch (error) {
@@ -84,7 +99,7 @@ export default function MessagesPage() {
     };
 
     initSocket();
-  }, []);
+  }, [session, refreshUnreadCount]);
 
   const fetchConversations = async () => {
     try {
@@ -176,7 +191,7 @@ export default function MessagesPage() {
               conversations.map((conversation) => (
                 <div
                   key={conversation._id}
-                  className="relative group bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100 dark:border-gray-700 overflow-hidden"
+                  className={`relative group bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100 dark:border-gray-700 overflow-hidden ${hasUnreadMessages(conversation._id) ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' : ''}`}
                 >
                   <Link
                     href={`/messages/${conversation._id}`}
@@ -192,13 +207,15 @@ export default function MessagesPage() {
                           className="rounded-full object-cover"
                         />
                       </div>
-                      {conversation.lastMessage && (
-                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white dark:border-gray-800 rounded-full" />
+                      {hasUnreadMessages(conversation._id) && (
+                        <div className="absolute -bottom-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-5 h-5 flex items-center justify-center px-1 border-2 border-white dark:border-gray-800">
+                          {getUnreadCount(conversation._id) > 99 ? '99+' : getUnreadCount(conversation._id)}
+                        </div>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <h2 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+                        <h2 className={`font-semibold truncate ${hasUnreadMessages(conversation._id) ? 'text-blue-700 dark:text-blue-300' : 'text-gray-900 dark:text-gray-100'}`}>
                           {getConversationName(conversation)}
                         </h2>
                       </div>
@@ -212,7 +229,7 @@ export default function MessagesPage() {
                           </p>
                         )}
                         {conversation.lastMessage && (
-                          <p className="text-sm text-gray-600 dark:text-gray-400 truncate flex-1 ml-2">
+                          <p className={`text-sm truncate flex-1 ml-2 ${hasUnreadMessages(conversation._id) ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'}`}>
                             {conversation.lastMessage.content}
                           </p>
                         )}
@@ -239,12 +256,6 @@ export default function MessagesPage() {
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
-                    {deletingId === conversation._id && (
-                      <span className="absolute -top-1 -right-1 h-3 w-3">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                      </span>
-                    )}
                   </button>
                 </div>
               ))

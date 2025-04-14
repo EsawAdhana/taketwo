@@ -5,6 +5,7 @@ import SessionProvider from '@/components/SessionProvider';
 import Navigation from '@/components/Navigation';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { SurveyNavigationProvider } from '@/contexts/SurveyNavigationContext';
+import { MessageNotificationProvider } from '@/contexts/MessageNotificationContext';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -26,10 +27,12 @@ export default async function RootLayout({
         <SessionProvider session={session}>
           <ThemeProvider>
             <SurveyNavigationProvider>
-              <div className="relative min-h-screen dark:bg-gray-900 dark:text-white">
-                {session && <Navigation />}
-                {children}
-              </div>
+              <MessageNotificationProvider>
+                <div className="relative min-h-screen dark:bg-gray-900 dark:text-white">
+                  {session && <Navigation />}
+                  {children}
+                </div>
+              </MessageNotificationProvider>
             </SurveyNavigationProvider>
           </ThemeProvider>
         </SessionProvider>

@@ -8,6 +8,8 @@ import Link from 'next/link';
 import { FiFlag, FiX, FiUsers, FiMapPin, FiCalendar, FiList, FiStar } from 'react-icons/fi';
 import UserProfileModal from '@/components/UserProfileModal';
 import ReportUserModal from '@/components/ReportUserModal';
+import { useMessageNotifications } from '@/contexts/MessageNotificationContext';
+import io from 'socket.io-client';
 
 interface Participant {
   _id: string;
@@ -54,12 +56,13 @@ export default function ConversationPage({
   const [isDeleting, setIsDeleting] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const socketRef = useRef<any>(null);
   const lastMessageTimestampRef = useRef<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<{email: string, name: string, image: string} | null>(null);
   const [loadingUserProfile, setLoadingUserProfile] = useState(false);
   const [userProfile, setUserProfile] = useState<any | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
+  const { refreshUnreadCount } = useMessageNotifications();
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
@@ -107,26 +110,68 @@ export default function ConversationPage({
     }
   };
 
-  // Poll for new messages
-  const pollForNewMessages = async () => {
-    if (!lastMessageTimestampRef.current) return;
-    
-    try {
-      const response = await fetch(
-        `/api/messages/poll?conversationId=${params.conversationId}&lastMessageTimestamp=${lastMessageTimestampRef.current}`
-      );
-      const result = await response.json();
+  // Initialize socket connection
+  const initSocketConnection = () => {
+    // Connect to the socket server
+    const socketUrl = process.env.NODE_ENV === 'production' 
+      ? window.location.origin
+      : 'http://localhost:3001';
       
-      if (response.ok && result.success && result.data && result.data.length > 0) {
-        setMessages(prev => [...prev, ...result.data]);
-        
-        // Update the last message timestamp
-        lastMessageTimestampRef.current = result.data[result.data.length - 1].createdAt;
-        
+    const socketIo = io(socketUrl, {
+      transports: ['websocket', 'polling']
+    });
+    
+    socketRef.current = socketIo;
+    
+    socketIo.on('connect', () => {
+      console.log('Connected to Socket.IO server', socketIo.id);
+      // Join conversation room
+      socketIo.emit('join-conversation', { conversationId: params.conversationId });
+    });
+    
+    socketIo.on('connect_error', (err) => {
+      console.error('Socket.IO connection error:', err);
+    });
+    
+    socketIo.on('new-message', (messageData) => {
+      console.log('New message received in conversation', messageData);
+      // Check if the message belongs to the current conversation
+      if (messageData.conversationId === params.conversationId) {
+        // Add the new message to the list
+        setMessages(prev => [...prev, messageData]);
         scrollToBottom();
+        // Mark the message as read
+        markMessageAsRead(messageData._id);
       }
+    });
+    
+    return socketIo;
+  };
+
+  // Mark a specific message as read
+  const markMessageAsRead = async (messageId: string) => {
+    try {
+      await fetch('/api/messages/mark-read', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messageId,
+          conversationId: params.conversationId,
+        }),
+      });
+      
+      // Emit socket event for message read
+      socketRef.current?.emit('message-read', {
+        messageId,
+        conversationId: params.conversationId,
+        userId: session?.user?.id
+      });
+      
+      refreshUnreadCount();
     } catch (error) {
-      console.error('Error polling for new messages:', error);
+      console.error('Error marking message as read:', error);
     }
   };
 
@@ -146,16 +191,7 @@ export default function ConversationPage({
     try {
       // Mark each unread message as read
       for (const message of unreadMessages) {
-        await fetch('/api/messages/mark-read', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            messageId: message._id,
-            conversationId: params.conversationId,
-          }),
-        });
+        await markMessageAsRead(message._id);
       }
       
       // Update the messages state to reflect read status
@@ -173,6 +209,15 @@ export default function ConversationPage({
             : msg
         )
       );
+      
+      // Emit socket event that all messages were read
+      socketRef.current?.emit('messages-read', {
+        conversationId: params.conversationId,
+        userId: session?.user?.id
+      });
+      
+      // Refresh unread count after marking messages as read
+      refreshUnreadCount();
     } catch (error) {
       console.error('Error marking messages as read:', error);
     }
@@ -206,6 +251,12 @@ export default function ConversationPage({
         
         // Update the last message timestamp
         lastMessageTimestampRef.current = result.data.createdAt;
+        
+        // Emit the message via socket
+        socketRef.current?.emit('send-message', {
+          ...result.data,
+          conversationId: params.conversationId
+        });
         
         scrollToBottom();
       } else {
@@ -309,43 +360,24 @@ export default function ConversationPage({
     fetchConversation();
     fetchMessages();
     
-    // Set up polling for new messages
-    pollingIntervalRef.current = setInterval(pollForNewMessages, 3000);
+    // Initialize socket connection instead of polling
+    const socket = initSocketConnection();
     
     // Mark messages as read when the conversation is loaded
     markMessagesAsRead();
     
     return () => {
-      // Clear the polling interval when the component unmounts
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
+      // Disconnect socket when component unmounts
+      if (socketRef.current) {
+        socketRef.current.disconnect();
       }
     };
   }, [session, params.conversationId, router]);
 
-  // Mark messages as read when the user scrolls to the bottom
+  // Mark messages as read when new messages are received
   useEffect(() => {
-    const handleScroll = () => {
-      const messagesContainer = document.getElementById('messages-container');
-      
-      if (messagesContainer) {
-        const { scrollTop, scrollHeight, clientHeight } = messagesContainer;
-        
-        // If the user has scrolled to the bottom, mark messages as read
-        if (scrollHeight - scrollTop <= clientHeight + 100) {
-          markMessagesAsRead();
-        }
-      }
-    };
-    
-    const messagesContainer = document.getElementById('messages-container');
-    
-    if (messagesContainer) {
-      messagesContainer.addEventListener('scroll', handleScroll);
-      
-      return () => {
-        messagesContainer.removeEventListener('scroll', handleScroll);
-      };
+    if (messages.length > 0) {
+      markMessagesAsRead();
     }
   }, [messages]);
 

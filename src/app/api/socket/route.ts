@@ -18,14 +18,18 @@ export async function GET(request: NextRequest) {
     // Create a simple HTTP server
     const httpServer = createServer();
     
-    // Initialize Socket.IO server
+    // Get the origin from the request to use for CORS
+    const origin = request.headers.get('origin') || '*';
+    
+    // Initialize Socket.IO server with proper CORS settings
     io = new Server(httpServer, {
       cors: {
-        origin: '*',
+        origin: ['http://localhost:3000', 'http://localhost:3001', origin],
         methods: ['GET', 'POST'],
         credentials: true
       },
-      transports: ['websocket', 'polling']
+      transports: ['websocket', 'polling'],
+      path: '/api/socketio' // Add a path to avoid conflicts with Next.js API routes
     });
     
     // Setup Socket.IO connection handling
@@ -33,21 +37,46 @@ export async function GET(request: NextRequest) {
       console.log('Client connected:', socket.id);
       
       // Join a conversation
-      socket.on('join-conversation', (conversationId) => {
-        socket.join(conversationId);
-        console.log(`Socket ${socket.id} joined conversation ${conversationId}`);
+      socket.on('join-conversation', (data) => {
+        if (data.conversationId) {
+          socket.join(data.conversationId);
+          console.log(`Socket ${socket.id} joined conversation ${data.conversationId}`);
+        }
       });
       
       // Leave a conversation
-      socket.on('leave-conversation', (conversationId) => {
-        socket.leave(conversationId);
-        console.log(`Socket ${socket.id} left conversation ${conversationId}`);
+      socket.on('leave-conversation', (data) => {
+        if (data.conversationId) {
+          socket.leave(data.conversationId);
+          console.log(`Socket ${socket.id} left conversation ${data.conversationId}`);
+        }
       });
       
       // Send a message to a conversation
       socket.on('send-message', (messageData) => {
         console.log(`Broadcasting message to conversation ${messageData.conversationId}`);
         io.to(messageData.conversationId).emit('new-message', messageData);
+        
+        // Also broadcast a general notification for unread count updates
+        socket.broadcast.emit('new-message');
+      });
+      
+      // Handle individual message being read
+      socket.on('message-read', (data) => {
+        console.log(`Message ${data.messageId} read by user ${data.userId}`);
+        io.to(data.conversationId).emit('message-read', data);
+        
+        // Also broadcast a general notification for unread count updates
+        io.emit('messages-read');
+      });
+      
+      // Handle all messages in a conversation being read
+      socket.on('messages-read', (data) => {
+        console.log(`All messages in conversation ${data.conversationId} read by user ${data.userId}`);
+        io.to(data.conversationId).emit('messages-read', data);
+        
+        // Also broadcast a general notification for unread count updates
+        io.emit('messages-read');
       });
       
       // Handle disconnection
