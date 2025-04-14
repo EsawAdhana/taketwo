@@ -51,6 +51,13 @@ export default function MessagesPage() {
     // Initialize socket connection
     const initSocket = async () => {
       try {
+        // Clean up existing socket if present
+        if (socket) {
+          console.log('Cleaning up existing messages page socket');
+          socket.disconnect();
+          setSocket(null);
+        }
+        
         // Initialize the socket.io server first
         const response = await fetch('/api/socket');
         if (!response.ok) {
@@ -90,15 +97,23 @@ export default function MessagesPage() {
           fetchConversations();
         });
 
-        return () => {
-          socketIo.disconnect();
-        };
+        return socketIo;
       } catch (error) {
         console.error('Socket initialization error:', error);
+        return null;
       }
     };
 
-    initSocket();
+    const socketInstance = initSocket();
+    
+    return () => {
+      if (socket) {
+        console.log('Disconnecting messages page socket on unmount');
+        socket.removeAllListeners();
+        socket.disconnect();
+        setSocket(null);
+      }
+    };
   }, [session, refreshUnreadCount]);
 
   const fetchConversations = async () => {

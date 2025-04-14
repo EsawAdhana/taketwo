@@ -5,9 +5,10 @@ import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { FiFlag, FiX, FiUsers, FiMapPin, FiCalendar, FiList, FiStar } from 'react-icons/fi';
+import { FiFlag, FiX, FiUsers, FiMapPin, FiCalendar, FiList, FiStar, FiInfo } from 'react-icons/fi';
 import UserProfileModal from '@/components/UserProfileModal';
 import ReportUserModal from '@/components/ReportUserModal';
+import ChatInfoModal from '@/components/ChatInfoModal';
 import { useMessageNotifications } from '@/contexts/MessageNotificationContext';
 import io from 'socket.io-client';
 
@@ -55,6 +56,7 @@ export default function ConversationPage({
   const [isSending, setIsSending] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showChatInfo, setShowChatInfo] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<any>(null);
   const lastMessageTimestampRef = useRef<string | null>(null);
@@ -66,7 +68,10 @@ export default function ConversationPage({
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Use setTimeout to ensure DOM has updated before scrolling
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
   };
 
   // Fetch conversation details
@@ -112,13 +117,24 @@ export default function ConversationPage({
 
   // Initialize socket connection
   const initSocketConnection = () => {
+    // Clean up any existing socket
+    if (socketRef.current) {
+      console.log('Cleaning up existing conversation socket');
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+    
     // Connect to the socket server
     const socketUrl = process.env.NODE_ENV === 'production' 
       ? window.location.origin
       : 'http://localhost:3001';
       
     const socketIo = io(socketUrl, {
-      transports: ['websocket', 'polling']
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      forceNew: true,
+      path: '/api/socketio'
     });
     
     socketRef.current = socketIo;
@@ -135,13 +151,23 @@ export default function ConversationPage({
     
     socketIo.on('new-message', (messageData) => {
       console.log('New message received in conversation', messageData);
-      // Check if the message belongs to the current conversation
-      if (messageData.conversationId === params.conversationId) {
-        // Add the new message to the list
-        setMessages(prev => [...prev, messageData]);
-        scrollToBottom();
-        // Mark the message as read
-        markMessageAsRead(messageData._id);
+      // Check if we have valid message data with a conversation ID
+      if (messageData && messageData.conversationId) {
+        // Check if the message belongs to the current conversation
+        if (messageData.conversationId === params.conversationId) {
+          // Only add messages from other users (to prevent duplicates)
+          // Since we already add our own messages when sending
+          if (messageData.senderId && messageData.senderId._id !== session?.user?.id) {
+            // Add the new message to the list
+            setMessages(prev => [...prev, messageData]);
+            scrollToBottom();
+            // Mark the message as read
+            markMessageAsRead(messageData._id);
+          }
+        }
+      } else {
+        // This is likely just a notification without data, refresh messages
+        fetchMessages();
       }
     });
     
@@ -369,10 +395,21 @@ export default function ConversationPage({
     return () => {
       // Disconnect socket when component unmounts
       if (socketRef.current) {
+        console.log('Disconnecting conversation socket on unmount');
+        socketRef.current.emit('leave-conversation', { conversationId: params.conversationId });
+        socketRef.current.removeAllListeners();
         socketRef.current.disconnect();
+        socketRef.current = null;
       }
     };
   }, [session, params.conversationId, router]);
+
+  // Effect to auto-scroll when messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      scrollToBottom();
+    }
+  }, [messages]);
 
   // Mark messages as read when new messages are received
   useEffect(() => {
@@ -535,7 +572,7 @@ export default function ConversationPage({
                                 }
                               }}
                             >
-                              <div className="relative w-8 h-8 mr-3 group">
+                              <div className="relative w-8 h-8 mr-2 group">
                                 <Image
                                   src={participant.image || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23cccccc"%3E%3Cpath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/%3E%3C/svg%3E'}
                                   alt={participant.name}
@@ -599,40 +636,38 @@ export default function ConversationPage({
                 </div>
               </div>
             </div>
+            
+            {/* Menu button positioned at the far right corner */}
+            <div className="relative">
+              <button 
+                onClick={() => setShowMenu(!showMenu)}
+                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label="Conversation menu"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                </svg>
+              </button>
+              
+              {/* Dropdown menu */}
+              {showMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-700">
+                  <div className="py-1">
+                    <button
+                      onClick={deleteConversation}
+                      className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? 'Deleting...' : 'Delete conversation'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </>
         )}
-        
-        {/* Menu button for additional options */}
-        <div className="flex items-center">
-          <div className="relative">
-            <button 
-              onClick={() => setShowMenu(!showMenu)}
-              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-              aria-label="Conversation menu"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-              </svg>
-            </button>
-            
-            {/* Dropdown menu */}
-            {showMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-700">
-                <div className="py-1">
-                  <button
-                    onClick={deleteConversation}
-                    className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    disabled={isDeleting}
-                  >
-                    {isDeleting ? 'Deleting...' : 'Delete conversation'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
       </div>
-
+      
       {/* Tip notification */}
       <div 
         id="profile-click-tip" 
@@ -793,6 +828,21 @@ export default function ConversationPage({
           </button>
         </form>
       </div>
+      
+      {/* Chat Info Modal */}
+      {showChatInfo && conversation && (
+        <ChatInfoModal
+          conversation={conversation}
+          currentUserId={session?.user?.id}
+          onClose={() => setShowChatInfo(false)}
+          onDeleteConversation={deleteConversation}
+          onViewProfile={(participant) => {
+            setShowChatInfo(false);
+            handleProfileClick(participant);
+          }}
+          isDeleting={isDeleting}
+        />
+      )}
       
       {/* User Profile Modal */}
       {selectedUser && (

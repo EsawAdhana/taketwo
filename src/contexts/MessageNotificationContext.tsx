@@ -82,6 +82,13 @@ export function MessageNotificationProvider({ children }: { children: React.Reac
     // Skip if no user is logged in
     if (!session?.user) return;
     
+    // Clean up existing socket if present
+    if (socketRef.current) {
+      console.log('Cleaning up existing notification socket');
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+    
     let socketIo: Socket | null = null;
     
     const setupSocket = async () => {
@@ -130,13 +137,15 @@ export function MessageNotificationProvider({ children }: { children: React.Reac
     
     setupSocket();
     
-    // Poll for updates as a fallback mechanism
+    // Poll for updates as a fallback mechanism, but with a longer interval
     const intervalId = setInterval(() => {
       fetchUnreadCount();
-    }, 30000); // Check every 30 seconds
+    }, 60000); // Check every 60 seconds instead of 30 seconds
     
     return () => {
       if (socketRef.current) {
+        console.log('Disconnecting notification socket on cleanup');
+        socketRef.current.removeAllListeners();
         socketRef.current.disconnect();
         socketRef.current = null;
       }

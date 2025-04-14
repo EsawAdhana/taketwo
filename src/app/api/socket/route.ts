@@ -4,10 +4,12 @@ import { Server } from 'socket.io';
 
 // Prevent multiple instances during hot reloading in development
 let io: Server;
+let clientCount = 0;
 
 export async function GET(request: NextRequest) {
   // Check if socket server already exists
   if (io) {
+    console.log(`Socket.IO server is already running with ${clientCount} clients connected`);
     return NextResponse.json({
       success: true,
       message: 'Socket.IO server is already running'
@@ -29,12 +31,17 @@ export async function GET(request: NextRequest) {
         credentials: true
       },
       transports: ['websocket', 'polling'],
-      path: '/api/socketio' // Add a path to avoid conflicts with Next.js API routes
+      path: '/api/socketio', // Add a path to avoid conflicts with Next.js API routes
+      maxHttpBufferSize: 1e6, // 1MB
+      pingTimeout: 30000,
+      pingInterval: 25000,
+      connectTimeout: 10000,
     });
     
     // Setup Socket.IO connection handling
     io.on('connection', (socket) => {
-      console.log('Client connected:', socket.id);
+      clientCount++;
+      console.log(`Client connected: ${socket.id} (Total clients: ${clientCount})`);
       
       // Join a conversation
       socket.on('join-conversation', (data) => {
@@ -55,10 +62,15 @@ export async function GET(request: NextRequest) {
       // Send a message to a conversation
       socket.on('send-message', (messageData) => {
         console.log(`Broadcasting message to conversation ${messageData.conversationId}`);
+        // Send the full message data to the specific conversation
         io.to(messageData.conversationId).emit('new-message', messageData);
         
         // Also broadcast a general notification for unread count updates
-        socket.broadcast.emit('new-message');
+        // Include minimal info to let other clients know a refresh is needed
+        socket.broadcast.emit('new-message', { 
+          type: 'notification', 
+          conversationId: messageData.conversationId 
+        });
       });
       
       // Handle individual message being read
@@ -81,7 +93,11 @@ export async function GET(request: NextRequest) {
       
       // Handle disconnection
       socket.on('disconnect', () => {
-        console.log('Client disconnected:', socket.id);
+        clientCount--;
+        console.log(`Client disconnected: ${socket.id} (Total clients: ${clientCount})`);
+        
+        // Clean up event listeners
+        socket.removeAllListeners();
       });
     });
     
