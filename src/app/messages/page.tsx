@@ -176,7 +176,7 @@ export default function MessagesPage() {
               conversations.map((conversation) => (
                 <div
                   key={conversation._id}
-                  className="group bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100 dark:border-gray-700 overflow-hidden"
+                  className="relative group bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100 dark:border-gray-700 overflow-hidden"
                 >
                   <Link
                     href={`/messages/${conversation._id}`}
@@ -201,13 +201,6 @@ export default function MessagesPage() {
                         <h2 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
                           {getConversationName(conversation)}
                         </h2>
-                        <span className="text-sm text-gray-500 dark:text-gray-400 flex-shrink-0">
-                          {new Date(conversation.updatedAt).toLocaleDateString(undefined, {
-                            month: 'short',
-                            day: 'numeric',
-                            year: new Date(conversation.updatedAt).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
-                          })}
-                        </span>
                       </div>
                       <div className="flex items-center justify-between mt-1">
                         {conversation.isGroup && (
@@ -226,8 +219,17 @@ export default function MessagesPage() {
                       </div>
                     </div>
                   </Link>
-                  
-                  {/* Delete button */}
+
+                  {/* Date Span moved here and positioned bottom-right */}
+                  <span className="absolute bottom-4 right-4 text-sm text-gray-500 dark:text-gray-400">
+                    {new Date(conversation.updatedAt).toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      year: new Date(conversation.updatedAt).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
+                    })}
+                  </span>
+
+                  {/* Delete button positioned top-right */}
                   <button
                     onClick={(e) => deleteConversation(e, conversation._id)}
                     disabled={deletingId === conversation._id}
