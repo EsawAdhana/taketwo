@@ -7,6 +7,7 @@ import { SurveyFormData } from '@/constants/survey-constants';
 import Image from 'next/image';
 import { FiUsers, FiHome, FiDollarSign, FiCalendar, FiList, FiStar, FiFlag, FiX, FiMapPin } from 'react-icons/fi';
 import ReportUserModal from '@/components/ReportUserModal';
+import UserProfileModal from '@/components/UserProfileModal';
 
 interface CompatibilityMatch {
   userEmail: string;
@@ -444,216 +445,27 @@ export default function DashboardPage() {
         </div>
       </div>
       
+      {/* User Profile Modal */}
       {selectedUserDetails && (
-        <>
-          <UserDetailsModal
-            match={selectedUserDetails}
-            onClose={() => setSelectedUserDetails(null)}
-            formatDate={formatDate}
-            loadingDetails={loadingUserDetails}
-            getName={getName}
-            onReport={() => setShowReportModal(true)}
-          />
-          
-          {showReportModal && (
-            <ReportUserModal
-              userEmail={selectedUserDetails.userEmail}
-              userName={getName(selectedUserDetails.userProfile, selectedUserDetails.fullProfile)}
-              onClose={() => setShowReportModal(false)}
-              onSuccess={handleReportSuccess}
-            />
-          )}
-        </>
+        <UserProfileModal
+          userData={{ fullProfile: selectedUserDetails.fullProfile }}
+          userProfile={selectedUserDetails.userProfile}
+          onClose={() => setSelectedUserDetails(null)}
+          loading={loadingUserDetails}
+          onReport={() => setShowReportModal(true)}
+          displayName={`${getName(selectedUserDetails.userProfile, selectedUserDetails.fullProfile)}'s Profile`}
+        />
+      )}
+
+      {/* Report Modal */}
+      {showReportModal && selectedUserDetails && (
+        <ReportUserModal
+          userEmail={selectedUserDetails.userEmail}
+          userName={getName(selectedUserDetails.userProfile, selectedUserDetails.fullProfile)}
+          onClose={() => setShowReportModal(false)}
+          onSuccess={handleReportSuccess}
+        />
       )}
     </main>
-  );
-}
-
-// Modal for user details
-function UserDetailsModal({ 
-  match, 
-  onClose, 
-  formatDate,
-  loadingDetails,
-  getName,
-  onReport
-}: { 
-  match: UserDetailProfile, 
-  onClose: () => void,
-  formatDate: (date: string) => string,
-  loadingDetails: boolean,
-  getName: (userProfile?: {name?: string}, fullProfile?: any) => string,
-  onReport: () => void
-}) {
-  const [isReporting, setIsReporting] = useState(false);
-
-  if (loadingDetails) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full mx-auto shadow-xl">
-          <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="mt-4 text-gray-600 dark:text-gray-300">Loading user details...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-  
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full mx-auto shadow-xl">
-        <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <span>{getName(match.userProfile, match.fullProfile)}'s Profile</span>
-          </h2>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setIsReporting(true)}
-              className="text-red-500 hover:text-red-600 dark:hover:text-red-400 flex items-center"
-              aria-label="Report user"
-            >
-              <FiFlag className="mr-1" />
-              <span className="text-sm">Report</span>
-            </button>
-            <button
-              onClick={onClose}
-              className="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100"
-              aria-label="Close modal"
-            >
-              <FiX size={24} />
-            </button>
-          </div>
-        </div>
-        
-        <div className="p-6">
-          {match.fullProfile ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Left column: Basic Information, Location, Housing Details */}
-              <div className="space-y-6">
-                {/* Basic Information */}
-                <div>
-                  <div className="flex items-center mb-3">
-                    <span className="text-indigo-600 dark:text-indigo-400 mr-2">
-                      <FiUsers className="inline" />
-                    </span>
-                    <h3 className="text-gray-900 dark:text-gray-100 font-medium">Basic Information</h3>
-                  </div>
-                  <div className="bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600">
-                    <div className="grid grid-cols-[1fr_auto] gap-y-2 p-4">
-                      <div className="text-gray-600 dark:text-gray-300">First Name:</div>
-                      <div className="text-right dark:text-gray-200">{match.fullProfile.firstName || 'Not specified'}</div>
-                      
-                      <div className="text-gray-600 dark:text-gray-300">Gender:</div>
-                      <div className="text-right dark:text-gray-200">{match.fullProfile.gender || 'Not specified'}</div>
-                      
-                      <div className="text-gray-600 dark:text-gray-300">Room with Different Gender:</div>
-                      <div className="text-right dark:text-gray-200">{match.fullProfile.roomWithDifferentGender ? 'Yes' : 'No'}</div>
-                      
-                      <div className="text-gray-600 dark:text-gray-300">Internship Company:</div>
-                      <div className="text-right dark:text-gray-200">{match.fullProfile.internshipCompany || 'Not specified'}</div>
-                      
-                      <div className="text-gray-600 dark:text-gray-300">Desired Roommates:</div>
-                      <div className="text-right dark:text-gray-200">{match.fullProfile.desiredRoommates || 'Not specified'}</div>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Location */}
-                <div>
-                  <div className="flex items-center mb-3">
-                    <span className="text-indigo-600 dark:text-indigo-400 mr-2">
-                      <FiMapPin className="inline" />
-                    </span>
-                    <h3 className="text-gray-900 dark:text-gray-100 font-medium">Location</h3>
-                  </div>
-                  <div className="bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600">
-                    <div className="grid grid-cols-[1fr_auto] gap-y-2 p-4">
-                      <div className="text-gray-600 dark:text-gray-300">Region:</div>
-                      <div className="text-right dark:text-gray-200">{match.fullProfile.housingRegion || 'Not specified'}</div>
-                      
-                      <div className="text-gray-600 dark:text-gray-300">Preferred Cities:</div>
-                      <div className="text-right dark:text-gray-200">{match.fullProfile.housingCities?.join(', ') || 'Not specified'}</div>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Housing Details */}
-                <div>
-                  <div className="flex items-center mb-3">
-                    <span className="text-indigo-600 dark:text-indigo-400 mr-2">
-                      <FiCalendar className="inline" />
-                    </span>
-                    <h3 className="text-gray-900 dark:text-gray-100 font-medium">Housing Details</h3>
-                  </div>
-                  <div className="bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600">
-                    <div className="grid grid-cols-[1fr_auto] gap-y-2 p-4">
-                      <div className="text-gray-600 dark:text-gray-300">Housing Start:</div>
-                      <div className="text-right dark:text-gray-200">{match.fullProfile.internshipStartDate ? formatDate(match.fullProfile.internshipStartDate) : 'Not specified'}</div>
-                      
-                      <div className="text-gray-600 dark:text-gray-300">Housing End:</div>
-                      <div className="text-right dark:text-gray-200">{match.fullProfile.internshipEndDate ? formatDate(match.fullProfile.internshipEndDate) : 'Not specified'}</div>
-                      
-                      <div className="text-gray-600 dark:text-gray-300">Monthly Budget:</div>
-                      <div className="text-right dark:text-gray-200">${match.fullProfile.minBudget?.toLocaleString() || '0'} - ${match.fullProfile.maxBudget?.toLocaleString() || '0'}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Right column: Preferences and Additional Notes */}
-              <div className="space-y-6">
-                {/* Preferences - Always display this section */}
-                <div>
-                  <div className="flex items-center mb-3">
-                    <span className="text-indigo-600 dark:text-indigo-400 mr-2">
-                      <FiList className="inline" />
-                    </span>
-                    <h3 className="text-gray-900 dark:text-gray-100 font-medium">Preferences</h3>
-                  </div>
-                  <div className="bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-4">
-                    {match.fullProfile.preferences && match.fullProfile.preferences.length > 0 ? (
-                      <div className="space-y-2">
-                        {match.fullProfile.preferences.map((pref, index) => (
-                          <div key={index} className="flex justify-between items-center py-1">
-                            <span className="dark:text-gray-200">{pref.item}</span>
-                            <span className="text-xs bg-gray-100 dark:bg-gray-600 dark:text-gray-200 px-2 py-0.5 rounded">{pref.strength}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-gray-500 dark:text-gray-400">No preferences specified</p>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Additional Notes - Always display this section */}
-                <div>
-                  <div className="flex items-center mb-3">
-                    <span className="text-indigo-600 dark:text-indigo-400 mr-2">
-                      <FiStar className="inline" />
-                    </span>
-                    <h3 className="text-gray-900 dark:text-gray-100 font-medium">Additional Notes</h3>
-                  </div>
-                  <div className="bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-4">
-                    <div className="max-h-[200px] overflow-y-auto">
-                      {match.fullProfile.additionalNotes ? (
-                        <p className="text-gray-700 dark:text-gray-200 whitespace-pre-wrap break-words">{match.fullProfile.additionalNotes}</p>
-                      ) : (
-                        <p className="text-gray-500 dark:text-gray-400">Not specified</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center p-6 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-              <p className="text-yellow-800 dark:text-yellow-200">User information is unavailable</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
   );
 } 

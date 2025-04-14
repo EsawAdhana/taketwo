@@ -5,6 +5,9 @@ import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { FiFlag, FiX, FiUsers, FiMapPin, FiCalendar, FiList, FiStar } from 'react-icons/fi';
+import UserProfileModal from '@/components/UserProfileModal';
+import ReportUserModal from '@/components/ReportUserModal';
 
 interface Participant {
   _id: string;
@@ -53,6 +56,10 @@ export default function ConversationPage({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessageTimestampRef = useRef<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<{email: string, name: string, image: string} | null>(null);
+  const [loadingUserProfile, setLoadingUserProfile] = useState(false);
+  const [userProfile, setUserProfile] = useState<any | null>(null);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
@@ -241,6 +248,57 @@ export default function ConversationPage({
     }
   };
 
+  // Handle profile picture click
+  const handleProfileClick = async (participant: Participant) => {
+    // Skip if clicking on own profile
+    if (participant._id === session?.user?.id) return;
+    
+    // Set the selected user
+    setSelectedUser({
+      email: participant._id,
+      name: participant.name,
+      image: participant.image
+    });
+    
+    setLoadingUserProfile(true);
+    
+    try {
+      // First, try to get the user email from the ID
+      const userResponse = await fetch(`/api/users/getEmail?userId=${encodeURIComponent(participant._id)}`);
+      
+      if (userResponse.ok) {
+        const userData = await userResponse.json();
+        if (userData.success && userData.email) {
+          // Now use the email to fetch the user profile
+          const profileResponse = await fetch(`/api/user?email=${encodeURIComponent(userData.email)}`);
+          
+          if (profileResponse.ok) {
+            const profileData = await profileResponse.json();
+            setUserProfile(profileData);
+          } else {
+            console.error('Failed to fetch user profile');
+            setUserProfile(null);
+          }
+        } else {
+          console.error('Failed to get user email');
+          setUserProfile(null);
+        }
+      } else {
+        console.error('Failed to fetch user email');
+        setUserProfile(null);
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      setUserProfile(null);
+    } finally {
+      setLoadingUserProfile(false);
+    }
+  };
+
+  const handleReportSuccess = () => {
+    setShowReportModal(false);
+  };
+
   // Initialize the conversation
   useEffect(() => {
     if (!session) {
@@ -290,6 +348,50 @@ export default function ConversationPage({
       };
     }
   }, [messages]);
+
+  // Effect to close the participants menu when clicking outside of it
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const menu = document.getElementById('participants-menu');
+      const groupIcon = document.querySelector('.group-icon');
+      
+      if (menu && !menu.classList.contains('hidden')) {
+        // Check if the click is outside the menu and group icon
+        if (!menu.contains(event.target as Node) && !groupIcon?.contains(event.target as Node)) {
+          menu.classList.add('hidden');
+        }
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Add a helper notification
+  useEffect(() => {
+    if (conversation && !localStorage.getItem('profile_click_tip_shown')) {
+      const tipTimeout = setTimeout(() => {
+        const tipElement = document.getElementById('profile-click-tip');
+        if (tipElement) {
+          tipElement.classList.remove('opacity-0');
+          tipElement.classList.add('opacity-100');
+          
+          setTimeout(() => {
+            tipElement.classList.remove('opacity-100');
+            tipElement.classList.add('opacity-0');
+            
+            // Mark as shown in localStorage so we don't show it again
+            localStorage.setItem('profile_click_tip_shown', 'true');
+          }, 5000);
+        }
+      }, 2000);
+      
+      return () => clearTimeout(tipTimeout);
+    }
+  }, [conversation]);
 
   if (!conversation) {
     return (
@@ -365,19 +467,89 @@ export default function ConversationPage({
               <div className="flex items-center space-x-3">
                 <div className="relative">
                   {conversation.isGroup ? (
-                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
+                    <div 
+                      className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center cursor-pointer group-icon"
+                      onClick={() => {
+                        // Show a list of participants that can be clicked
+                        const menu = document.getElementById('participants-menu');
+                        if (menu) {
+                          menu.classList.toggle('hidden');
+                        }
+                      }}
+                    >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                       </svg>
+                      
+                      {/* Participants dropdown menu */}
+                      <div id="participants-menu" className="absolute top-12 left-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-700 hidden">
+                        <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+                          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Group Participants</h3>
+                        </div>
+                        <div className="py-1 max-h-64 overflow-y-auto">
+                          {conversation.participants.map((participant) => (
+                            <div
+                              key={participant._id}
+                              className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
+                              onClick={() => {
+                                // Close the menu
+                                const menu = document.getElementById('participants-menu');
+                                if (menu) {
+                                  menu.classList.add('hidden');
+                                }
+                                // Only handle click for other participants
+                                if (participant._id !== session?.user?.id) {
+                                  handleProfileClick(participant);
+                                }
+                              }}
+                            >
+                              <div className="relative w-8 h-8 mr-3 group">
+                                <Image
+                                  src={participant.image || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23cccccc"%3E%3Cpath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/%3E%3C/svg%3E'}
+                                  alt={participant.name}
+                                  fill
+                                  sizes="(max-width: 768px) 32px, 32px"
+                                  className="rounded-full object-cover hover:ring-2 hover:ring-blue-500 transition-all"
+                                />
+                                {participant._id === session?.user?.id ? (
+                                  <span className="absolute bottom-0 right-0 bg-green-500 rounded-full w-3 h-3 border-2 border-white dark:border-gray-800"></span>
+                                ) : participant._id !== session?.user?.id && (
+                                  <div className="absolute bottom-0 right-0 bg-blue-500 rounded-full w-3 h-3 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border border-white dark:border-gray-800">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-2 w-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex-1">
+                                <span className="text-sm text-gray-800 dark:text-gray-200">
+                                  {participant.name}
+                                  {participant._id === session?.user?.id && ' (You)'}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   ) : (
-                    <div className="relative w-10 h-10">
+                    <div className="relative w-10 h-10 group">
                       <Image
                         src={conversation.otherParticipants[0]?.image || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23cccccc"%3E%3Cpath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/%3E%3C/svg%3E'}
                         alt={conversation.otherParticipants[0]?.name || 'User'}
                         fill
-                        className="rounded-full object-cover"
+                        sizes="(max-width: 768px) 40px, 40px"
+                        className="rounded-full object-cover cursor-pointer ring-offset-2 ring-transparent hover:ring-2 hover:ring-blue-500 transition-all"
+                        onClick={() => handleProfileClick(conversation.otherParticipants[0])}
+                        title="View profile"
                       />
+                      <div className="absolute bottom-0 right-0 bg-blue-500 rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -429,6 +601,17 @@ export default function ConversationPage({
         </div>
       </div>
 
+      {/* Tip notification */}
+      <div 
+        id="profile-click-tip" 
+        className="fixed top-16 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded-md shadow-lg opacity-0 transition-opacity duration-300 z-20 flex items-center"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>Tip: Click on profile pictures to view user details</span>
+      </div>
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-900 space-y-4">
         {!conversation ? (
@@ -477,13 +660,24 @@ export default function ConversationPage({
               >
                 {message.senderId._id !== session?.user?.id && (
                   <div className="flex items-center mb-1">
-                    <div className="relative w-6 h-6 mr-2">
+                    <div 
+                      className="relative w-6 h-6 mr-2 cursor-pointer group"
+                      onClick={() => handleProfileClick(message.senderId)}
+                      title="View profile"
+                    >
                       <Image
                         src={message.senderId.image || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23cccccc"%3E%3Cpath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/%3E%3C/svg%3E'}
                         alt={message.senderId.name}
                         fill
-                        className="rounded-full object-cover"
+                        sizes="(max-width: 768px) 24px, 24px"
+                        className="rounded-full object-cover hover:ring-1 hover:ring-blue-500 transition-all"
                       />
+                      <div className="absolute bottom-0 right-0 bg-blue-500 rounded-full w-2.5 h-2.5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-1.5 w-1.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      </div>
                     </div>
                     <span className="text-xs font-medium dark:text-gray-300">
                       {message.senderId.name}
@@ -508,14 +702,18 @@ export default function ConversationPage({
                             .map((reader) => (
                               <div
                                 key={reader._id}
-                                className="relative w-4 h-4 rounded-full border border-white dark:border-blue-600"
+                                className="relative w-4 h-4 rounded-full border border-white dark:border-blue-600 cursor-pointer group hover:z-10"
+                                onClick={() => handleProfileClick(reader)}
+                                title={`View ${reader.name}'s profile`}
                               >
                                 <Image
                                   src={reader.image || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23cccccc"%3E%3Cpath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/%3E%3C/svg%3E'}
                                   alt={reader.name}
                                   fill
-                                  className="rounded-full object-cover"
+                                  sizes="(max-width: 768px) 16px, 16px"
+                                  className="rounded-full object-cover hover:ring-1 hover:ring-blue-300 transition-all"
                                 />
+                                <div className="absolute top-0 right-0 w-full h-full rounded-full bg-blue-500 bg-opacity-0 group-hover:bg-opacity-20 transition-all"></div>
                               </div>
                             ))}
                           {message.readBy.length > 3 && (
@@ -563,6 +761,41 @@ export default function ConversationPage({
           </button>
         </form>
       </div>
+      
+      {/* User Profile Modal */}
+      {selectedUser && (
+        <UserProfileModal
+          userData={userProfile}
+          userProfile={selectedUser}
+          onClose={() => {
+            setSelectedUser(null);
+            setUserProfile(null);
+          }}
+          loading={loadingUserProfile}
+          displayName="Other's Profile"
+          onReport={() => setShowReportModal(true)}
+        />
+      )}
+      
+      {/* Report Modal */}
+      {showReportModal && selectedUser && (
+        <ReportUserModal
+          userEmail={selectedUser.email}
+          userName={selectedUser.name}
+          onClose={() => setShowReportModal(false)}
+          onSuccess={handleReportSuccess}
+        />
+      )}
     </div>
   );
-} 
+}
+
+// Function to format date for display
+const formatDate = (dateString: string) => {
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch (e) {
+    return dateString || 'N/A';
+  }
+}; 

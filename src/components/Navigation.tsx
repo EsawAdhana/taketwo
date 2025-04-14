@@ -13,15 +13,15 @@ export default function Navigation() {
   const router = useRouter();
   const { isSubmitted, loading } = useSurveyStatus();
   
-  // Don't render navigation on the landing page or conversation pages
-  if (pathname === '/' || (pathname.startsWith('/messages/') && pathname !== '/messages')) {
+  // Don't render navigation only on the landing page
+  if (pathname === '/') {
     return null;
   }
 
   // Check which page is active
   const isActive = (path: string) => {
     if (path === '/dashboard' && pathname === '/dashboard') return true;
-    if (path === '/messages' && pathname === '/messages') return true;
+    if (path === '/messages' && (pathname === '/messages' || pathname.startsWith('/messages/'))) return true;
     if (path === '/survey' && pathname.startsWith('/survey')) return true;
     if (path === '/settings' && pathname === '/settings') return true;
     return false;

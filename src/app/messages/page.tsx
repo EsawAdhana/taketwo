@@ -37,22 +37,50 @@ export default function MessagesPage() {
   useEffect(() => {
     // Initialize socket connection
     const initSocket = async () => {
-      await fetch('/api/socket');
-      const socket = io();
-      setSocket(socket);
+      try {
+        // Initialize the socket.io server first
+        const response = await fetch('/api/socket');
+        if (!response.ok) {
+          console.error('Failed to initialize Socket.IO server');
+          return;
+        }
+        
+        // Parse the response to get the socket server information
+        const data = await response.json();
+        console.log('Socket.IO initialization response:', data);
 
-      socket.on('connect', () => {
-        // ... existing code ...
-      });
+        // Connect to the socket server using the explicit URL
+        // This connects to our separate Socket.IO server on port 3001
+        const socketUrl = process.env.NODE_ENV === 'production' 
+          ? window.location.origin
+          : 'http://localhost:3001';
+          
+        const socketIo = io(socketUrl, {
+          transports: ['websocket', 'polling']
+        });
+        
+        setSocket(socketIo);
 
-      socket.on('new-message', (message) => {
-        // Update conversations list when a new message is received
-        fetchConversations();
-      });
+        socketIo.on('connect', () => {
+          console.log('Connected to Socket.IO server', socketIo.id);
+        });
 
-      return () => {
-        socket.disconnect();
-      };
+        socketIo.on('connect_error', (err) => {
+          console.error('Socket.IO connection error:', err);
+        });
+
+        socketIo.on('new-message', (message) => {
+          console.log('New message received:', message);
+          fetchConversations();
+        });
+
+        return () => {
+          console.log('Disconnecting socket');
+          socketIo.disconnect();
+        };
+      } catch (error) {
+        console.error('Socket initialization error:', error);
+      }
     };
 
     initSocket();
@@ -160,6 +188,7 @@ export default function MessagesPage() {
                           src={getConversationImage(conversation)}
                           alt={getConversationName(conversation)}
                           fill
+                          sizes="(max-width: 768px) 48px, 48px"
                           className="rounded-full object-cover"
                         />
                       </div>
