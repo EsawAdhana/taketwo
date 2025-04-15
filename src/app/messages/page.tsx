@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { FiSettings, FiHome } from 'react-icons/fi';
 import { useMessageNotifications } from '@/contexts/MessageNotificationContext';
+import { useSocket } from '@/contexts/SocketContext';
 
 interface Participant {
   _id: string;
@@ -31,9 +32,9 @@ export default function MessagesPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { refreshUnreadCount, hasUnreadMessages, unreadByConversation } = useMessageNotifications();
+  const { socket, isConnected, joinConversation } = useSocket();
 
   // Custom function to get unread count since the context one isn't working
   const getUnreadCount = (conversationId: string) => {
@@ -47,123 +48,52 @@ export default function MessagesPage() {
     // Fetch conversations initially
     fetchConversations();
     
-    // Start polling for conversations
-    const startPolling = () => {
-      // Clear any existing interval
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-      
-      // Flag to prevent overlapping requests
-      let isPolling = false;
-      // Counter for consecutive errors to implement backoff
-      let errorCount = 0;
-      // Default polling interval
-      let pollingInterval = 5000; 
-      
-      // Set interval to fetch conversations
-      const pollForConversations = async () => {
-        // Skip if already polling
-        if (isPolling) return;
-        
-        try {
-          isPolling = true;
-          const controller = new AbortController();
-          // Set timeout to 3 seconds
-          const timeoutId = setTimeout(() => controller.abort(), 3000);
-          
-          // Wrap fetchConversations in a timeout
-          const fetchWithTimeout = async () => {
-            const response = await fetch('/api/conversations', {
-              cache: 'no-store',
-              headers: {
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache'
-              },
-              signal: controller.signal
-            });
-            
-            if (!response.ok) {
-              throw new Error(`Failed to fetch conversations: ${response.status}`);
-            }
-            
-            const result = await response.json();
-            if (result.success && result.data) {
-              setConversations(result.data);
-            } else {
-              throw new Error('Invalid response format');
-            }
-          };
-          
-          await fetchWithTimeout().finally(() => clearTimeout(timeoutId));
-          await refreshUnreadCount();
-          
-          // Reset error count on success
-          errorCount = 0;
-        } catch (error) {
-          // Handle errors silently when likely offline
-          if (error instanceof DOMException && error.name === 'AbortError') {
-            // Silent fail - request timed out
-            errorCount++;
-          } else if (!navigator.onLine) {
-            // Browser reports we're offline - silent fail
-            errorCount++;
-          } else if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-            // Server is likely down - silent fail
-            errorCount++;
+    // Setup socket connections after fetching conversations
+    if (isConnected && socket) {
+      // Listen for conversation updates
+      socket.on('conversation-update', (updatedConversation) => {
+        setConversations(prev => {
+          const index = prev.findIndex(c => c._id === updatedConversation._id);
+          if (index >= 0) {
+            // Replace the existing conversation
+            const newConversations = [...prev];
+            newConversations[index] = updatedConversation;
+            return newConversations;
           } else {
-            // Log other unexpected errors
-            console.error('Error in polling cycle:', error);
-            errorCount++;
+            // Add the new conversation
+            return [updatedConversation, ...prev];
           }
-        } finally {
-          isPolling = false;
-          
-          // Implement exponential backoff if we have consecutive errors
-          if (errorCount > 0) {
-            // Recalculate polling interval with exponential backoff
-            // Cap at 60 seconds max interval
-            const maxBackoff = 60000;
-            pollingInterval = Math.min(5000 * Math.pow(1.5, errorCount - 1), maxBackoff);
-            
-            // Reset the polling interval
-            if (pollingIntervalRef.current) {
-              clearInterval(pollingIntervalRef.current);
-              pollingIntervalRef.current = setInterval(pollForConversations, pollingInterval);
-            }
-          }
-        }
-      };
+        });
+      });
       
-      // Poll immediately
-      pollForConversations();
+      // Listen for new messages that might update conversation lists
+      socket.on('new-message', (message) => {
+        // Refresh conversation list when a new message arrives
+        fetchConversations();
+      });
       
-      // Then set interval
-      pollingIntervalRef.current = setInterval(pollForConversations, pollingInterval);
+      // Listen for conversation deletions
+      socket.on('conversation-deleted', (conversationId) => {
+        setConversations(prev => prev.filter(conv => conv._id !== conversationId));
+      });
       
+      // Clean up socket listeners
       return () => {
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
-        }
+        socket.off('conversation-update');
+        socket.off('new-message');
+        socket.off('conversation-deleted');
       };
-    };
-    
-    // Start polling
-    const cleanupPolling = startPolling();
-    
-    return () => {
-      // Clean up polling on unmount
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-      
-      // Call cleanup function
-      if (cleanupPolling) cleanupPolling();
-    };
-  }, [session, refreshUnreadCount]);
+    }
+  }, [session, isConnected, socket]);
+  
+  // Join all conversation rooms when the list changes
+  useEffect(() => {
+    if (isConnected && socket && conversations.length > 0) {
+      // Join all conversation rooms to receive updates
+      const conversationIds = conversations.map(c => c._id);
+      socket.emit('join-conversations', conversationIds);
+    }
+  }, [conversations, isConnected, socket]);
 
   const fetchConversations = async () => {
     try {

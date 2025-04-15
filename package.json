@@ -4,8 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:websocket": "node server.js",
     "build": "next build",
     "start": "next start",
+    "start:websocket": "NODE_ENV=production node server.js",
     "lint": "next lint"
   },
   "keywords": [],
@@ -28,6 +30,8 @@
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-icons": "^5.5.0",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
     "supports-color": "^10.0.0",
     "typescript": "latest",
     "utf-8-validate": "^6.0.5"
