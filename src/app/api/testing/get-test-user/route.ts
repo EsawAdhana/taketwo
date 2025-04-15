@@ -3,18 +3,21 @@ import { getServerSession } from 'next-auth';
 import clientPromise from '@/lib/mongodb';
 import { WithId, Document } from 'mongodb';
 import { SurveyFormData } from '@/constants/survey-constants';
+import { ExtendedSurveyData } from '@/types/survey';
 
 // This endpoint is for testing purposes only
 // Should be disabled in production
 const ENABLE_TEST_ENDPOINT = process.env.NODE_ENV !== 'production';
 
 // Convert MongoDB document to SurveyFormData
-function documentToSurveyData(doc: WithId<Document>): SurveyFormData {
+function documentToSurveyData(doc: WithId<Document>): ExtendedSurveyData {
   return {
+    firstName: doc.firstName || '',
     gender: doc.gender || '',
     roomWithDifferentGender: !!doc.roomWithDifferentGender,
     housingRegion: doc.housingRegion || '',
     housingCities: Array.isArray(doc.housingCities) ? doc.housingCities : [],
+    internshipCompany: doc.internshipCompany || '',
     internshipStartDate: doc.internshipStartDate || '',
     internshipEndDate: doc.internshipEndDate || '',
     desiredRoommates: doc.desiredRoommates || '1',
@@ -28,7 +31,7 @@ function documentToSurveyData(doc: WithId<Document>): SurveyFormData {
     userEmail: doc.userEmail || '',
     name: doc.name || '',
     email: doc.email || '',
-  } as SurveyFormData;
+  };
 }
 
 export async function GET(req: NextRequest) {
@@ -95,10 +98,13 @@ export async function GET(req: NextRequest) {
       }
     });
     
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error getting test user:', error);
     return NextResponse.json(
-      { error: 'Failed to get test user' },
+      { 
+        error: 'Failed to get test user',
+        message: error instanceof Error ? error.message : 'Unknown error occurred'
+      },
       { status: 500 }
     );
   }

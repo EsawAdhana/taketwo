@@ -32,8 +32,8 @@ export async function GET(req: Request) {
 
     // Verify user is part of the conversation
     const conversation = await Conversation.findById(conversationId);
-    if (!conversation || !conversation.participants.some(p => 
-      p.toString() === userId.toString()
+    if (!conversation || !conversation.participants.some((p: unknown) => 
+      p !== null && p !== undefined && p.toString() === userId.toString()
     )) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -44,9 +44,12 @@ export async function GET(req: Request) {
       .populate('readBy', 'name image');
 
     return NextResponse.json({ success: true, data: messages });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error fetching messages:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Internal Server Error',
+      message: error instanceof Error ? error.message : 'Unknown error occurred'
+    }, { status: 500 });
   }
 }
 
@@ -83,8 +86,8 @@ export async function POST(req: Request) {
     }
     
     // Check if user is part of conversation participants
-    const isParticipant = conversation.participants.some(p => 
-      p.toString() === senderId.toString()
+    const isParticipant = conversation.participants.some((p: unknown) => 
+      p !== null && p !== undefined && p.toString() === senderId.toString()
     );
     
     if (!isParticipant) {
@@ -109,8 +112,11 @@ export async function POST(req: Request) {
     await message.populate('readBy', 'name image');
 
     return NextResponse.json({ success: true, data: message });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error sending message:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Internal Server Error',
+      message: error instanceof Error ? error.message : 'Unknown error occurred'
+    }, { status: 500 });
   }
 } 

@@ -98,7 +98,7 @@ export async function POST(req: Request) {
     let filteredParticipants = [...participants];
     
     // Deduplicate participants
-    filteredParticipants = [...new Set(filteredParticipants)];
+    filteredParticipants = Array.from(new Set(filteredParticipants));
     
     // Look up users by email if the ID is not a valid ObjectId
     const validParticipants = await Promise.all(filteredParticipants.map(async (id) => {
@@ -154,17 +154,20 @@ export async function POST(req: Request) {
       .populate('lastMessage');
 
     return NextResponse.json({ success: true, data: populatedConversation });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error creating conversation:', error);
     
     // Provide more detailed error information
-    if (error.name === 'ValidationError') {
+    if (error && typeof error === 'object' && 'name' in error && error.name === 'ValidationError' && 'errors' in error) {
       return NextResponse.json({ 
         error: 'Validation Error', 
         details: error.errors 
       }, { status: 400 });
     }
     
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Internal Server Error',
+      message: error instanceof Error ? error.message : 'Unknown error occurred'
+    }, { status: 500 });
   }
 } 

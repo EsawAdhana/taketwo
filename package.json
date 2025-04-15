@@ -19,10 +19,11 @@
     "@types/react-dom": "latest",
     "bad-words": "^4.0.0",
     "bufferutil": "^4.0.9",
+    "date-fns": "^4.1.0",
     "encoding": "^0.1.13",
     "mongodb": "latest",
     "mongoose": "latest",
-    "next": "13.4.19",
+    "next": "^13.5.11",
     "next-auth": "latest",
     "openai": "^4.91.1",
     "react": "18.2.0",
@@ -34,6 +35,8 @@
   },
   "devDependencies": {
     "autoprefixer": "^10.4.14",
+    "eslint": "9.24.0",
+    "eslint-config-next": "15.3.0",
     "postcss": "^8.4.31",
     "tailwindcss": "^3.3.0"
   }

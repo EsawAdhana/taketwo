@@ -20,24 +20,14 @@ export function SurveyNavigationProvider({ children }: { children: React.ReactNo
   const router = useRouter();
   const { isSubmitted, loading } = useSurveyStatus();
   
-  // Automatically enable warning when in a survey path and either:
-  // 1. The user explicitly has unsaved changes, or
-  // 2. The user is revisiting a previously submitted survey
+  // Only enable warning when in survey path and there are unsaved changes
   useEffect(() => {
     if (pathname.includes('/survey')) {
-      // Only enable the warning if there are explicit unsaved changes
-      const shouldWarn = hasUnsavedChanges;
-      console.log('Survey Navigation - Should warn?', {
-        hasUnsavedChanges,
-        isSubmitted, // Still log isSubmitted for context, but don't use it for the warning condition
-        shouldWarn,
-        pathname
-      });
-      setShowWarningOnNavigation(shouldWarn);
+      setShowWarningOnNavigation(hasUnsavedChanges);
     } else {
       setShowWarningOnNavigation(false);
     }
-  }, [pathname, hasUnsavedChanges, isSubmitted, loading]);
+  }, [pathname, hasUnsavedChanges]);
   
   // Set up a global click interceptor for navigation
   useEffect(() => {
@@ -46,91 +36,72 @@ export function SurveyNavigationProvider({ children }: { children: React.ReactNo
     const handleClick = (e: MouseEvent) => {
       if (!e.target || !(e.target instanceof HTMLElement)) return;
       
-      // Find if the click is on an anchor tag or inside one
-      const findClickTarget = (element: HTMLElement | null): HTMLElement | null => {
+      // Find if the click is on a navigation element (anchor or button)
+      const findNavigationElement = (element: HTMLElement | null): HTMLAnchorElement | HTMLButtonElement | null => {
         if (!element) return null;
-        if (element.tagName === 'A' || element.tagName === 'BUTTON') {
-          return element;
-        }
-        return element.parentElement ? findClickTarget(element.parentElement) : null;
+        if (element.tagName === 'A') return element as HTMLAnchorElement;
+        if (element.tagName === 'BUTTON') return element as HTMLButtonElement;
+        return element.parentElement ? findNavigationElement(element.parentElement) : null;
       };
       
-      const navigationElement = findClickTarget(e.target as HTMLElement);
-      
+      const navigationElement = findNavigationElement(e.target as HTMLElement);
       if (!navigationElement) return;
       
-      // Skip internal survey navigation (Next, Back, Submit Survey buttons)
-      // These buttons should have specific classes in the survey form
-      if (pathname.includes('/survey')) {
-        const isInternalNavigation = 
-          // Check if it's one of our own navigation buttons
-          (navigationElement.textContent?.includes('Next') ||
-           navigationElement.textContent?.includes('Back') ||
-           navigationElement.textContent?.includes('Submit Survey') ||
-           navigationElement.textContent?.includes('Save Changes')) &&
-          // And it's within a form
-          navigationElement.closest('form') !== null;
-        
-        if (isInternalNavigation) {
-          return;
-        }
+      // Skip internal survey navigation (buttons inside forms)
+      if (pathname.includes('/survey') && navigationElement.closest('form')) {
+        return;
       }
       
-      // If it's an anchor tag with href
+      // Handle anchor tags
       if (navigationElement.tagName === 'A') {
         const link = navigationElement as HTMLAnchorElement;
-        if (!link.href || link.href.includes('#') || link.target === '_blank') return;
         
-        // Skip if it's linking to the current page
-        if (link.href.includes(pathname)) return;
-
-        // Check if we need to show a warning
+        // Skip handling for: 
+        // - Links without href
+        // - Hash links
+        // - Links opening in new tabs
+        // - Links to current page
+        if (!link.href || 
+            link.href.includes('#') || 
+            link.target === '_blank' ||
+            link.href.includes(pathname)) {
+          return;
+        }
+        
+        // Show warning for navigation to different pages
         const targetPath = link.href.replace(window.location.origin, '');
-        const restrictedPaths = ['/dashboard', '/messages', '/settings'];
-        
-        if (showWarningOnNavigation && restrictedPaths.includes(targetPath)) {
+        if (showWarningOnNavigation) {
           const confirmationMessage = "You have unsaved changes. Are you sure you want to leave? Your changes will be lost.";
           if (!window.confirm(confirmationMessage)) {
-            e.preventDefault(); // Prevent navigation
-            e.stopImmediatePropagation(); // Stop other listeners
-            return; // Stop execution
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            return;
           }
         }
         
-        // Proceed with navigation
+        // For internal links, use Next.js router
         if (link.href.startsWith(window.location.origin)) {
-          // For internal links, prevent default and use router
-          e.preventDefault(); 
+          e.preventDefault();
           router.push(targetPath);
-        } 
-        // For external links, do NOT prevent default, let the browser handle it.
-      }
-      // If it's a button that might navigate
+        }
+      } 
+      // Handle button-based navigation
       else if (navigationElement.tagName === 'BUTTON') {
         // Skip disabled buttons
-        if (navigationElement.hasAttribute('disabled') || navigationElement.classList.contains('disabled')) {
+        if (navigationElement.hasAttribute('disabled') || 
+            navigationElement.classList.contains('disabled')) {
           return;
         }
 
-        // Check if we need to show a warning for button-based navigation (e.g., settings or messages could potentially use buttons)
-        // This part might need adjustment depending on how your buttons trigger navigation.
-        // For now, we assume buttons that navigate away from the survey page will also trigger the warning if needed.
-        // Let's focus on the common case: the Sign Out button
-        if (navigationElement.textContent?.includes('Sign Out')) {
-          if (showWarningOnNavigation) {
-            const confirmationMessage = "You have unsaved changes. Are you sure you want to sign out? Your changes will be lost.";
-            if (!window.confirm(confirmationMessage)) {
-              e.preventDefault(); // Prevent the default action (like form submission if inside one)
-              e.stopImmediatePropagation(); // Stop other listeners
-              return; // Stop execution
-            }
+        // Show warning for sign out buttons
+        if (navigationElement.textContent?.includes('Sign Out') && showWarningOnNavigation) {
+          const confirmationMessage = "You have unsaved changes. Are you sure you want to sign out? Your changes will be lost.";
+          if (!window.confirm(confirmationMessage)) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            return;
           }
-          // If confirmed or no warning needed, let the button's original onClick handler proceed (handled by Navigation.tsx)
-          return; 
         }
-        
-        // If this button is not part of the survey form controls and not the sign out button,
-        // let its click handler proceed without interference from this context.
       }
     };
     

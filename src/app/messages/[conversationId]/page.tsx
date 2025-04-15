@@ -12,6 +12,7 @@ import ChatInfoModal from '@/components/ChatInfoModal';
 import { useMessageNotifications } from '@/contexts/MessageNotificationContext';
 import { formatDistance } from 'date-fns';
 import ReportModal from '@/components/ReportModal';
+import { usePolling } from '@/hooks/usePolling';
 
 interface Participant {
   _id: string;
@@ -59,7 +60,6 @@ export default function ConversationPage({
   const [showMenu, setShowMenu] = useState(false);
   const [showChatInfo, setShowChatInfo] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [selectedUser, setSelectedUser] = useState<{email: string, name: string, image: string} | null>(null);
   const [loadingUserProfile, setLoadingUserProfile] = useState(false);
   const [userProfile, setUserProfile] = useState<any | null>(null);
@@ -116,143 +116,78 @@ export default function ConversationPage({
     }
   };
 
-  // Remove socket initialization function and create a polling function instead
-  const startPolling = () => {
-    // Clear any existing interval
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
+  // Poll for new messages
+  const pollForNewMessages = async () => {
+    // Skip if missing data
+    if (!lastMessageTimestampRef.current || !session?.user?.email) {
+      return;
     }
     
-    // Flag to prevent overlapping requests
-    let isPolling = false;
-    // Counter for consecutive errors to implement backoff
-    let errorCount = 0;
-    // Default polling interval
-    let pollingInterval = 2000;
-    
-    // Set up polling interval
-    const pollForNewMessages = async () => {
-      // Skip if already polling or missing data
-      if (isPolling || !lastMessageTimestampRef.current || !session?.user?.email) {
-        return;
+    const response = await fetch(
+      `/api/messages/poll?conversationId=${params.conversationId}&lastMessageTimestamp=${encodeURIComponent(lastMessageTimestampRef.current)}`, 
+      {
+        // Add cache control to prevent duplicate requests
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        },
+        signal: usePollingState.abortController?.signal
       }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch messages: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    
+    if (result.success && result.data.length > 0) {
+      // Add the new messages to our list
+      const newMessages = result.data;
       
-      try {
-        isPolling = true;
-        const controller = new AbortController();
-        // Set timeout to 3 seconds
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
+      setMessages(prev => {
+        // Avoid duplicates by checking IDs
+        const currentMessageIds = new Set(prev.map((msg: Message) => msg._id));
+        const uniqueNewMessages = newMessages.filter((msg: Message) => !currentMessageIds.has(msg._id));
         
-        const response = await fetch(
-          `/api/messages/poll?conversationId=${params.conversationId}&lastMessageTimestamp=${encodeURIComponent(lastMessageTimestampRef.current)}`, 
-          {
-            // Add cache control to prevent duplicate requests
-            cache: 'no-store',
-            headers: {
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache'
-            },
-            signal: controller.signal
-          }
-        ).finally(() => clearTimeout(timeoutId));
-        
-        if (!response.ok) {
-          // Silent fail - don't log every failed request when server is down
-          errorCount++;
-          return;
-        }
-        
-        // Reset error count on successful response
-        errorCount = 0;
-        
-        const result = await response.json();
-        
-        if (result.success && result.data.length > 0) {
-          // Add the new messages to our list
-          const newMessages = result.data;
+        if (uniqueNewMessages.length > 0) {
+          const updatedMessages = [...prev, ...uniqueNewMessages];
           
-          setMessages(prev => {
-            // Avoid duplicates by checking IDs
-            const currentMessageIds = new Set(prev.map((msg: Message) => msg._id));
-            const uniqueNewMessages = newMessages.filter((msg: Message) => !currentMessageIds.has(msg._id));
+          // Update last message timestamp
+          if (uniqueNewMessages.length > 0) {
+            const latestMessage = uniqueNewMessages[uniqueNewMessages.length - 1];
+            lastMessageTimestampRef.current = latestMessage.createdAt;
             
-            if (uniqueNewMessages.length > 0) {
-              const updatedMessages = [...prev, ...uniqueNewMessages];
-              
-              // Update last message timestamp
-              if (uniqueNewMessages.length > 0) {
-                const latestMessage = uniqueNewMessages[uniqueNewMessages.length - 1];
-                lastMessageTimestampRef.current = latestMessage.createdAt;
-                
-                // Mark new messages as read
-                for (const message of uniqueNewMessages) {
-                  // Get the current user's email from session
-                  const currentUserEmail = session?.user?.email;
-                  // Only mark messages as read if they're not from the current user
-                  if (message.senderId._id !== currentUserEmail) {
-                    markMessageAsRead(message._id);
-                  }
-                }
-                
-                // Scroll to bottom when new messages arrive
-                scrollToBottom();
+            // Mark new messages as read
+            for (const message of uniqueNewMessages) {
+              // Get the current user's email from session
+              const currentUserEmail = session?.user?.email;
+              // Only mark messages as read if they're not from the current user
+              if (message.senderId._id !== currentUserEmail) {
+                markMessageAsRead(message._id);
               }
-              
-              return updatedMessages;
             }
             
-            return prev;
-          });
-        }
-      } catch (error) {
-        // Only log if it's not an abort error or network error (when server is down)
-        if (error instanceof DOMException && error.name === 'AbortError') {
-          // Silent fail - request timed out
-          errorCount++;
-        } else if (!navigator.onLine) {
-          // Browser reports we're offline - silent fail
-          errorCount++;
-        } else if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-          // Server is likely down - silent fail
-          errorCount++;
-        } else {
-          // Log other unexpected errors
-          console.error('Error polling for new messages:', error);
-          errorCount++;
-        }
-      } finally {
-        isPolling = false;
-        
-        // Implement exponential backoff if we have consecutive errors
-        if (errorCount > 0) {
-          // Recalculate polling interval with exponential backoff
-          // Cap at 30 seconds max interval
-          const maxBackoff = 30000;
-          pollingInterval = Math.min(2000 * Math.pow(1.5, errorCount - 1), maxBackoff);
-          
-          // Reset the polling interval
-          if (pollingIntervalRef.current) {
-            clearInterval(pollingIntervalRef.current);
-            pollingIntervalRef.current = setInterval(pollForNewMessages, pollingInterval);
+            // Scroll to bottom when new messages arrive
+            scrollToBottom();
           }
+          
+          return updatedMessages;
         }
-      }
-    };
-    
-    // Poll immediately, then set interval
-    pollForNewMessages();
-    
-    // Set interval to poll
-    pollingIntervalRef.current = setInterval(pollForNewMessages, pollingInterval);
-    
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-    };
+        
+        return prev;
+      });
+    }
   };
+
+  // Use the polling hook
+  const usePollingState = usePolling({
+    pollingFunction: pollForNewMessages,
+    initialInterval: 2000,
+    maxInterval: 30000,
+    enabled: !!session?.user && !!params.conversationId
+  });
 
   // Mark a specific message as read
   const markMessageAsRead = async (messageId: string) => {
@@ -446,22 +381,11 @@ export default function ConversationPage({
     fetchConversation();
     fetchMessages();
     
-    // Initialize polling instead of socket connection
-    const cleanupPolling = startPolling();
-    
     // Mark messages as read when the conversation is loaded
     markMessagesAsRead();
     
-    return () => {
-      // Clean up polling when component unmounts
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-      
-      // Call the cleanup function returned by startPolling
-      if (cleanupPolling) cleanupPolling();
-    };
+    // Cleanup is handled by the hook
+    return () => {};
   }, [session, params.conversationId, router]);
 
   // Effect to auto-scroll when messages change

@@ -4,23 +4,21 @@ import clientPromise from '@/lib/mongodb';
 import { calculateCompatibilityScore, calculateEnhancedCompatibilityScore } from '@/utils/recommendationEngine';
 import { WithId, Document } from 'mongodb';
 import { SurveyFormData } from '@/constants/survey-constants';
+import { ExtendedSurveyData } from '@/types/survey';
 
 // This endpoint is for testing purposes only
 // Should be disabled in production
 const ENABLE_TEST_ENDPOINT = process.env.NODE_ENV !== 'production';
 
-// Extended version with name field
-interface ExtendedSurveyData extends SurveyFormData {
-  name?: string;
-}
-
 // Convert MongoDB document to SurveyFormData
 function documentToSurveyData(doc: any): ExtendedSurveyData {
   return {
+    firstName: doc.firstName || '',
     gender: doc.gender || '',
     roomWithDifferentGender: !!doc.roomWithDifferentGender,
     housingRegion: doc.housingRegion || '',
     housingCities: Array.isArray(doc.housingCities) ? doc.housingCities : [],
+    internshipCompany: doc.internshipCompany || '',
     internshipStartDate: doc.internshipStartDate || '',
     internshipEndDate: doc.internshipEndDate || '',
     desiredRoommates: doc.desiredRoommates || '1',
@@ -33,8 +31,8 @@ function documentToSurveyData(doc: any): ExtendedSurveyData {
     isSubmitted: !!doc.isSubmitted,
     userEmail: doc.userEmail || doc.email || '',
     name: doc.name || '',
-    email: doc.email || '',
-  } as ExtendedSurveyData;
+    email: doc.email || doc.userEmail || '',
+  };
 }
 
 export async function GET(req: NextRequest) {

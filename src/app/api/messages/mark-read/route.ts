@@ -37,8 +37,8 @@ export async function POST(req: Request) {
     }
     
     // Check if user is part of conversation participants
-    const isParticipant = conversation.participants.some(p => 
-      p.toString() === userId.toString()
+    const isParticipant = conversation.participants.some((p: unknown) => 
+      p !== null && p !== undefined && p.toString() === userId.toString()
     );
     
     if (!isParticipant) {
@@ -52,7 +52,9 @@ export async function POST(req: Request) {
     }
 
     // Check if user already read the message
-    const hasRead = message.readBy.some(id => id.toString() === userId.toString());
+    const hasRead = message.readBy.some((id: unknown) => 
+      id !== null && id !== undefined && id.toString() === userId.toString()
+    );
     if (hasRead) {
       return NextResponse.json({ success: true, data: message });
     }
@@ -65,8 +67,11 @@ export async function POST(req: Request) {
     );
     
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error marking message as read:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Internal Server Error',
+      message: error instanceof Error ? error.message : 'Unknown error occurred'
+    }, { status: 500 });
   }
 } 

@@ -42,8 +42,8 @@ export async function GET(req: Request) {
     }
     
     // Check if user is part of conversation participants
-    const isParticipant = conversation.participants.some(p => 
-      p.toString() === userId.toString()
+    const isParticipant = conversation.participants.some((p: unknown) => 
+      p !== null && p !== undefined && p.toString() === userId.toString()
     );
     
     if (!isParticipant) {
@@ -60,8 +60,11 @@ export async function GET(req: Request) {
       .populate('readBy', 'name image');
 
     return NextResponse.json({ success: true, data: newMessages });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error polling for new messages:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Internal Server Error',
+      message: error instanceof Error ? error.message : 'Unknown error occurred'
+    }, { status: 500 });
   }
 } 

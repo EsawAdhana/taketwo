@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
-import { HOUSING_REGIONS, NON_NEGOTIABLES, SurveyFormData, INITIAL_FORM_DATA, Preference } from '@/constants/survey-constants';
 import { useRouter } from 'next/navigation';
 import { usePathname } from 'next/navigation';
 import { useSurveyNavigation } from '@/contexts/SurveyNavigationContext';
+import { useSurveyForm } from '@/hooks/useSurveyForm';
+import { SurveyFormData } from '@/constants/survey-constants';
 
 // Page components
 import BasicInfoPage from './pages/BasicInfoPage';
@@ -20,17 +20,22 @@ interface MultiPageSurveyProps {
 }
 
 export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false, isTestMode = false }: MultiPageSurveyProps) {
-  const { data: session } = useSession();
   const router = useRouter();
   const pathname = usePathname();
   const { setShowWarningOnNavigation, setHasUnsavedChanges } = useSurveyNavigation();
   
-  const [formData, setFormData] = useState<SurveyFormData>(INITIAL_FORM_DATA);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [showCompletionModal, setShowCompletionModal] = useState(false);
-  const [originalData, setOriginalData] = useState<SurveyFormData | null>(null);
-  const [hasDateError, setHasDateError] = useState(false);
+  const {
+    formData,
+    setFormData,
+    loading,
+    saving,
+    setSaving,
+    hasDateError,
+    setHasDateError,
+    showCompletionModal, 
+    setShowCompletionModal,
+    saveSurvey
+  } = useSurveyForm({ isEditing, isTestMode });
   
   // Enable navigation warnings if editing or if there are unsaved changes
   useEffect(() => {
@@ -44,388 +49,184 @@ export default function MultiPageSurvey({ onSubmitSuccess, isEditing = false, is
     };
   }, [isEditing, setShowWarningOnNavigation, setHasUnsavedChanges]);
   
-  // Track form changes against original data to detect unsaved changes
-  useEffect(() => {
-    if (!originalData || loading) return;
-    
-    // Helper function to compare objects and detect significant changes
-    const hasMeaningfulChanges = () => {
-      // Skip comparing currentPage and other UI-related fields
-      const compareFields = (obj1: any, obj2: any, ignoredFields = ['currentPage']) => {
-        for (const key in obj1) {
-          if (ignoredFields.includes(key)) continue;
-          
-          // Handle arrays specially (like preferences, housingCities)
-          if (Array.isArray(obj1[key]) && Array.isArray(obj2[key])) {
-            // For simple arrays, JSON.stringify is sufficient
-            if (JSON.stringify(obj1[key]) !== JSON.stringify(obj2[key])) {
-              return true;
-            }
-          } 
-          // Handle nested objects
-          else if (typeof obj1[key] === 'object' && obj1[key] !== null && 
-                  typeof obj2[key] === 'object' && obj2[key] !== null) {
-            if (compareFields(obj1[key], obj2[key])) {
-              return true;
-            }
-          }
-          // Handle primitive values
-          else if (obj1[key] !== obj2[key]) {
-            return true;
-          }
-        }
-        return false;
-      };
-      
-      return compareFields(formData, originalData) || compareFields(originalData, formData);
-    };
-    
-    // Detect if there are unsaved changes
-    const hasChanges = hasMeaningfulChanges();
-    console.log('Detected form changes:', hasChanges);
-    setHasUnsavedChanges(hasChanges);
-    
-  }, [formData, originalData, loading, setHasUnsavedChanges]);
-  
-  // Fetch existing survey data
-  useEffect(() => {
-    const fetchSurvey = async () => {
-      if (!session) return;
-      
-      // Skip fetching previous data if we're in test mode
-      if (isTestMode) {
-        setLoading(false);
-        return;
-      }
-      
-      try {
-        const response = await fetch('/api/survey');
-        const result = await response.json();
-        
-        if (response.ok && result.data) {
-          // Create a map of existing preferences for easy lookup
-          const existingPreferences = new Map(
-            result.data.preferences?.map((p: Preference) => [p.item, p]) || []
-          );
-          
-          // Merge with initial preferences, keeping existing ones and using neutral for missing ones
-          const mergedPreferences = INITIAL_FORM_DATA.preferences.map(initialPref => 
-            existingPreferences.get(initialPref.item) || initialPref
-          );
-          
-          const surveyData = {
-            ...INITIAL_FORM_DATA,
-            ...result.data,
-            preferences: mergedPreferences,
-            // Keep the saved page unless the survey was submitted
-            currentPage: result.data.isSubmitted ? 1 : (result.data.currentPage || 1),
-            // Preserve isSubmitted status even during editing
-            isSubmitted: isEditing ? result.data.isSubmitted : (result.data.isSubmitted || false)
-          };
-          
-          setFormData(surveyData);
-          setOriginalData(surveyData);
-        }
-      } catch (error) {
-        console.error('Error fetching survey data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchSurvey();
-  }, [session, isEditing, isTestMode]);
-  
-  // Save form data
-  const saveSurvey = async (finalSubmit = false) => {
-    setSaving(true);
-    
-    try {
-      // Always preserve the isSubmitted status if it was previously true
-      const isAlreadySubmitted = formData.isSubmitted || (originalData?.isSubmitted ?? false);
-      const willBeSubmitted = finalSubmit || isAlreadySubmitted;
-      
-      // Update local state first for immediate feedback
-      if (finalSubmit && !formData.isSubmitted) {
-        setFormData(prev => ({ ...prev, isSubmitted: true }));
-      }
-      
-      // Send the full formData including currentPage
-      const response = await fetch('/api/survey', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...formData,
-          isDraft: !willBeSubmitted,
-          isSubmitted: willBeSubmitted
-        }),
-      });
-      
-      const result = await response.json();
-      
-      if (response.ok) {
-        // Reset unsaved changes flag after successful save
-        if (finalSubmit) {
-          setHasUnsavedChanges(false);
-        }
-        
-        // Update originalData to match current data after successful save
-        setOriginalData({...formData});
-        
-        // Double-check that isSubmitted is set properly
-        if (finalSubmit) {
-          // Make another request to check the status
-          try {
-            const checkResponse = await fetch('/api/survey');
-            const checkResult = await checkResponse.json();
-            
-            if (checkResult.data && !checkResult.data.isSubmitted) {
-              // If somehow isSubmitted is still false, try to save again
-              await fetch('/api/survey', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  ...formData,
-                  isDraft: false,
-                  isSubmitted: true
-                }),
-              });
-            }
-          } catch (error) {
-            console.error('Error checking submission status:', error);
-          }
-        }
-        return true;
-      } else {
-        console.error('Error:', result.error);
-        return false;
-      }
-    } catch (error) {
-      console.error('Error saving survey:', error);
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  };
-  
-  // Handle page navigation
   const canProceed = () => {
+    // Validation logic for each page
     switch (formData.currentPage) {
-      case 1:
-        return !!formData.firstName && !!formData.firstName.trim() && !!formData.gender;
-      case 2:
-        return !!formData.housingRegion && formData.housingCities.length > 0;
-      case 3:
-        return !!formData.internshipStartDate && 
-               !!formData.internshipEndDate && 
-               !!formData.desiredRoommates && 
-               formData.minBudget >= 500 &&
-               formData.maxBudget >= formData.minBudget &&
-               !hasDateError;
-      case 4:
-        return true;
+      case 1: // Basic info page
+        return formData.firstName.trim() !== '' && formData.gender !== '';
+      case 2: // Location page
+        return formData.housingRegion !== '' && formData.housingCities.length > 0;
+      case 3: // Timing & Budget page
+        // Check both dates are filled
+        const hasValidDates = formData.internshipStartDate && formData.internshipEndDate && !hasDateError;
+        return hasValidDates && Number(formData.minBudget) > 0 && Number(formData.maxBudget) >= Number(formData.minBudget);
       default:
-        return false;
+        return true;
     }
   };
   
   const handleNext = async () => {
-    if (!canProceed()) return;
-    
-    setFormData(prev => ({ 
-      ...prev, 
-      currentPage: Math.min(prev.currentPage + 1, 4)
-    }));
+    // Save progress before moving to next page
+    await saveSurvey(false);
+    // Move to next page
+    setFormData((prev: SurveyFormData) => ({ ...prev, currentPage: prev.currentPage + 1 }));
   };
   
   const handleBack = () => {
-    setFormData(prev => ({ 
-      ...prev, 
-      currentPage: Math.max(prev.currentPage - 1, 1)
-    }));
+    // Move to previous page
+    setFormData((prev: SurveyFormData) => ({ ...prev, currentPage: prev.currentPage - 1 }));
   };
   
   const handleSubmit = async () => {
-    if (isTestMode) {
-      // In test mode, pass the form data to onSubmitSuccess
+    try {
+      await saveSurvey(true);
+      
+      // Show completion modal
+      setShowCompletionModal(true);
+      
+      // Notify parent component if needed
       if (onSubmitSuccess) {
         onSubmitSuccess(formData);
       }
-      return;
-    }
-    
-    const success = await saveSurvey(true);
-    if (success) {
-      setShowCompletionModal(true);
+    } catch (error) {
+      console.error('Error submitting survey:', error);
     }
   };
   
   const handleGoToDashboard = () => {
-    setShowCompletionModal(false);
-    if (onSubmitSuccess) {
-      onSubmitSuccess(formData);
-    } else {
-      // Fallback if onSubmitSuccess is not provided
-      router.push('/dashboard');
-    }
-    
-    // Force navigation after a short delay as a backup
-    setTimeout(() => {
-      window.location.href = '/dashboard';
-    }, 300);
+    router.push('/dashboard');
   };
   
   if (loading) {
-    return <div className="py-4 text-center text-gray-800 dark:text-gray-200">Loading survey...</div>;
+    return (
+      <div className="flex justify-center items-center h-64 py-8">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
   }
   
   return (
     <div className="max-w-3xl mx-auto">
+      {/* Progress indicator */}
+      <div className="mb-8">
+        <div className="flex justify-between items-center">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div 
+              key={i} 
+              className={`flex items-center ${i < 3 ? 'flex-1' : ''}`}
+            >
+              <div className={`flex items-center justify-center h-8 w-8 rounded-full 
+                ${i + 1 < formData.currentPage ? 'bg-blue-500 text-white' : 
+                  i + 1 === formData.currentPage ? 'bg-blue-500 text-white' : 
+                  'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-300'}`}
+              >
+                {i + 1 < formData.currentPage ? '✓' : i + 1}
+              </div>
+              
+              {i < 3 && (
+                <div className={`flex-1 h-1 mx-2 
+                  ${i + 1 < formData.currentPage ? 'bg-blue-500' : 'bg-gray-200 dark:bg-gray-700'}`}
+                ></div>
+              )}
+            </div>
+          ))}
+        </div>
+        
+        <div className="flex justify-between mt-2 text-sm text-gray-500 dark:text-gray-400">
+          <div className="flex-1 text-center">Basic Info</div>
+          <div className="flex-1 text-center">Location</div>
+          <div className="flex-1 text-center">Timing & Budget</div>
+          <div className="flex-1 text-center">Preferences</div>
+        </div>
+      </div>
+      
+      {/* Conditional rendering of pages */}
+      <div className="mb-6">
+        {formData.currentPage === 1 && <BasicInfoPage formData={formData} setFormData={setFormData} />}
+        {formData.currentPage === 2 && <LocationPage formData={formData} setFormData={setFormData} />}
+        {formData.currentPage === 3 && (
+          <TimingBudgetPage 
+            formData={formData} 
+            setFormData={setFormData} 
+            setHasDateError={setHasDateError} 
+          />
+        )}
+        {formData.currentPage === 4 && <PreferencesPage formData={formData} setFormData={setFormData} />}
+      </div>
+      
+      {/* Navigation buttons */}
+      <div className="flex justify-between mt-8 mb-12">
+        {formData.currentPage > 1 ? (
+          <button
+            onClick={handleBack}
+            className="px-6 py-2 rounded-md bg-white text-blue-600 border border-blue-500 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+            type="button"
+          >
+            Back
+          </button>
+        ) : (
+          <div></div> // Empty div for spacing
+        )}
+        
+        {formData.currentPage < 4 ? (
+          <button
+            onClick={handleNext}
+            disabled={!canProceed() || saving}
+            className={`px-6 py-2 rounded-md text-white 
+              ${!canProceed() ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} 
+              focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors flex items-center`}
+            type="button"
+          >
+            {saving ? (
+              <>
+                <span className="animate-spin inline-block h-4 w-4 border-t-2 border-b-2 border-white rounded-full mr-2"></span>
+                Saving...
+              </>
+            ) : (
+              "Next"
+            )}
+          </button>
+        ) : (
+          <button
+            onClick={handleSubmit}
+            disabled={saving || !canProceed()}
+            className={`px-6 py-2 rounded-md text-white 
+              ${saving || !canProceed() ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} 
+              focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors flex items-center`}
+            type="button"
+          >
+            {saving ? (
+              <>
+                <span className="animate-spin inline-block h-4 w-4 border-t-2 border-b-2 border-white rounded-full mr-2"></span>
+                Saving...
+              </>
+            ) : (
+              "Submit Survey"
+            )}
+          </button>
+        )}
+      </div>
+      
       {/* Completion Modal */}
       {showCompletionModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full mx-4 text-center">
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              Survey Completed!
-            </h3>
-            <p className="text-gray-600 dark:text-gray-300 mb-6">
-              Thank you for completing the survey. You can update your preferences with the "Survey" tab.
+        <div className="fixed inset-0 z-50 overflow-auto bg-gray-800 bg-opacity-50 flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-8 max-w-md mx-auto">
+            <h2 className="text-2xl font-bold text-center mb-4 text-gray-900 dark:text-gray-100">Survey Completed!</h2>
+            <p className="text-center text-gray-700 dark:text-gray-300 mb-6">
+              Thank you for completing your roommate survey. You can now browse potential roommates and find your perfect match!
             </p>
-            <button
-              onClick={handleGoToDashboard}
-              className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-            >
-              Go to Dashboard
-            </button>
+            <div className="flex justify-center">
+              <button
+                onClick={handleGoToDashboard}
+                className="px-6 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                type="button"
+              >
+                Go to Dashboard
+              </button>
+            </div>
           </div>
         </div>
       )}
-      
-      {/* Progress Bar */}
-      <div className="mb-8">
-        <div className="flex justify-between mb-2">
-          {['Basic Info', 'Location', 'Housing Details', 'Preferences'].map((step, index) => (
-            <div
-              key={step}
-              className={`flex-1 text-center ${
-                index + 1 === formData.currentPage
-                  ? 'text-blue-600 dark:text-blue-400 font-semibold'
-                  : index + 1 < formData.currentPage
-                  ? 'text-green-600 dark:text-green-400'
-                  : 'text-gray-400 dark:text-gray-500'
-              }`}
-            >
-              {step}
-            </div>
-          ))}
-        </div>
-        <div className="h-2 flex rounded-full bg-gray-200 dark:bg-gray-700">
-          {[1, 2, 3, 4].map((step) => (
-            <div
-              key={step}
-              className={`flex-1 ${
-                step <= formData.currentPage
-                  ? 'bg-blue-600'
-                  : ''
-              } ${step === 1 ? 'rounded-l-full' : ''} ${
-                step === 4 ? 'rounded-r-full' : ''
-              }`}
-            />
-          ))}
-        </div>
-      </div>
-      
-      {/* Form Pages */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg">
-        <form onSubmit={(e) => e.preventDefault()}>
-          {formData.currentPage === 1 && (
-            <BasicInfoPage
-              formData={formData}
-              setFormData={setFormData}
-            />
-          )}
-          
-          {formData.currentPage === 2 && (
-            <LocationPage
-              formData={formData}
-              setFormData={setFormData}
-            />
-          )}
-          
-          {formData.currentPage === 3 && (
-            <TimingBudgetPage
-              formData={formData}
-              setFormData={setFormData}
-              setHasDateError={setHasDateError}
-            />
-          )}
-          
-          {formData.currentPage === 4 && (
-            <PreferencesPage
-              formData={formData}
-              setFormData={setFormData}
-            />
-          )}
-          
-          {/* Navigation Buttons */}
-          <div className="flex justify-between mt-8">
-            <button
-              type="button"
-              onClick={handleBack}
-              disabled={formData.currentPage === 1 || saving}
-              className="px-4 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
-            >
-              Back
-            </button>
-            
-            <div className="flex gap-4">
-              {isEditing && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    // This Cancel button should always navigate away without a warning
-                    // Remove the confirmation dialog
-                    
-                    // Disable navigation warning before leaving
-                    setShowWarningOnNavigation(false); 
-                    setHasUnsavedChanges(false);
-                    
-                    // Navigate away
-                    router.push('/dashboard');
-                  }}
-                  className="px-4 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
-                >
-                  Cancel
-                </button>
-              )}
-              
-              {formData.currentPage < 4 ? (
-                <button
-                  type="button"
-                  onClick={handleNext}
-                  disabled={!canProceed() || saving}
-                  className="px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {saving ? 'Saving...' : 'Next'}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={saving}
-                  className="px-4 py-2 text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50"
-                >
-                  {saving ? 'Saving...' : isEditing ? 'Save Changes' : isTestMode ? 'Create Test User' : 'Submit Survey'}
-                </button>
-              )}
-            </div>
-          </div>
-        </form>
-      </div>
     </div>
   );
 } 

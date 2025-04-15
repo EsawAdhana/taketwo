@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { FiSettings, FiHome } from 'react-icons/fi';
 import { useMessageNotifications } from '@/contexts/MessageNotificationContext';
+import { usePolling } from '@/hooks/usePolling';
 
 interface Participant {
   _id: string;
@@ -31,7 +32,6 @@ export default function MessagesPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { refreshUnreadCount, hasUnreadMessages, unreadByConversation } = useMessageNotifications();
 
@@ -41,130 +41,7 @@ export default function MessagesPage() {
     return conversation?.unreadCount || 0;
   };
 
-  useEffect(() => {
-    if (!session?.user) return;
-    
-    // Fetch conversations initially
-    fetchConversations();
-    
-    // Start polling for conversations
-    const startPolling = () => {
-      // Clear any existing interval
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-      
-      // Flag to prevent overlapping requests
-      let isPolling = false;
-      // Counter for consecutive errors to implement backoff
-      let errorCount = 0;
-      // Default polling interval
-      let pollingInterval = 5000; 
-      
-      // Set interval to fetch conversations
-      const pollForConversations = async () => {
-        // Skip if already polling
-        if (isPolling) return;
-        
-        try {
-          isPolling = true;
-          const controller = new AbortController();
-          // Set timeout to 3 seconds
-          const timeoutId = setTimeout(() => controller.abort(), 3000);
-          
-          // Wrap fetchConversations in a timeout
-          const fetchWithTimeout = async () => {
-            const response = await fetch('/api/conversations', {
-              cache: 'no-store',
-              headers: {
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache'
-              },
-              signal: controller.signal
-            });
-            
-            if (!response.ok) {
-              throw new Error(`Failed to fetch conversations: ${response.status}`);
-            }
-            
-            const result = await response.json();
-            if (result.success && result.data) {
-              setConversations(result.data);
-            } else {
-              throw new Error('Invalid response format');
-            }
-          };
-          
-          await fetchWithTimeout().finally(() => clearTimeout(timeoutId));
-          await refreshUnreadCount();
-          
-          // Reset error count on success
-          errorCount = 0;
-        } catch (error) {
-          // Handle errors silently when likely offline
-          if (error instanceof DOMException && error.name === 'AbortError') {
-            // Silent fail - request timed out
-            errorCount++;
-          } else if (!navigator.onLine) {
-            // Browser reports we're offline - silent fail
-            errorCount++;
-          } else if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-            // Server is likely down - silent fail
-            errorCount++;
-          } else {
-            // Log other unexpected errors
-            console.error('Error in polling cycle:', error);
-            errorCount++;
-          }
-        } finally {
-          isPolling = false;
-          
-          // Implement exponential backoff if we have consecutive errors
-          if (errorCount > 0) {
-            // Recalculate polling interval with exponential backoff
-            // Cap at 60 seconds max interval
-            const maxBackoff = 60000;
-            pollingInterval = Math.min(5000 * Math.pow(1.5, errorCount - 1), maxBackoff);
-            
-            // Reset the polling interval
-            if (pollingIntervalRef.current) {
-              clearInterval(pollingIntervalRef.current);
-              pollingIntervalRef.current = setInterval(pollForConversations, pollingInterval);
-            }
-          }
-        }
-      };
-      
-      // Poll immediately
-      pollForConversations();
-      
-      // Then set interval
-      pollingIntervalRef.current = setInterval(pollForConversations, pollingInterval);
-      
-      return () => {
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
-        }
-      };
-    };
-    
-    // Start polling
-    const cleanupPolling = startPolling();
-    
-    return () => {
-      // Clean up polling on unmount
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-      
-      // Call cleanup function
-      if (cleanupPolling) cleanupPolling();
-    };
-  }, [session, refreshUnreadCount]);
-
+  // Fetch conversations
   const fetchConversations = async () => {
     try {
       const response = await fetch('/api/conversations', {
@@ -172,21 +49,54 @@ export default function MessagesPage() {
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache'
-        }
+        },
+        signal: usePollingState.abortController?.signal
       });
       
       if (!response.ok) {
-        return;
+        throw new Error(`Failed to fetch conversations: ${response.status}`);
       }
       
       const result = await response.json();
       if (result.success && result.data) {
         setConversations(result.data);
+      } else {
+        throw new Error('Invalid response format');
       }
+      
+      // Refresh unread counts after fetching conversations
+      await refreshUnreadCount();
     } catch (error) {
-      // Silently fail for initial fetch
+      // Let the polling hook handle error logic
+      throw error;
     }
   };
+
+  // Use the polling hook
+  const usePollingState = usePolling({
+    pollingFunction: fetchConversations,
+    initialInterval: 5000,
+    maxInterval: 60000,
+    enabled: !!session?.user
+  });
+
+  // Initial fetch
+  useEffect(() => {
+    if (!session?.user) return;
+    
+    // Initial fetch - this will be handled differently than the polling
+    const initialFetch = async () => {
+      try {
+        await fetchConversations();
+      } catch (error) {
+        // Silently fail for initial fetch
+      }
+    };
+    
+    initialFetch();
+    
+    // Cleanup handled by the hook
+  }, [session]);
 
   const getConversationName = (conversation: Conversation) => {
     if (conversation.isGroup) {

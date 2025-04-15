@@ -12,7 +12,9 @@ export async function GET() {
   try {
     // Simple connection test - avoid complex queries
     const client = await clientPromise;
-    const isConnected = !!client && client.topology?.isConnected();
+    // MongoDB client topology property is internal and may not be typed correctly
+    // Use type assertion and optional chaining to safely access it
+    const isConnected = !!client && !!(client as any).topology?.isConnected?.();
     const dbName = client.db().databaseName;
     
     // Get basic stats - just the list of collections
@@ -36,7 +38,8 @@ export async function GET() {
       connection: {
         connected: isConnected,
         dbName,
-        serverInfo: client.serverInfo,
+        // serverInfo is also an internal property, use type assertion
+        serverInfo: (client as any).serverInfo || { version: 'unknown' },
         collectionCount: collectionNames.length
       },
       collectionNames,
