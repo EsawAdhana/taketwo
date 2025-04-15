@@ -3,7 +3,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
-import { io, Socket } from 'socket.io-client';
 
 interface UnreadConversation {
   conversationId: string;
@@ -26,21 +25,51 @@ export function MessageNotificationProvider({ children }: { children: React.Reac
   const [unreadByConversation, setUnreadByConversation] = useState<UnreadConversation[]>([]);
   const { data: session } = useSession();
   const pathname = usePathname();
-  const socketRef = useRef<Socket | null>(null);
+  const isFetchingRef = useRef(false);
   
   const fetchUnreadCount = useCallback(async () => {
-    if (!session?.user) return;
+    if (!session?.user || isFetchingRef.current) return;
     
     try {
-      const response = await fetch('/api/messages/unread?detailed=true');
+      isFetchingRef.current = true;
+      const controller = new AbortController();
+      // Set timeout to prevent long-hanging requests
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      
+      const response = await fetch('/api/messages/unread?detailed=true', {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        },
+        signal: controller.signal
+      }).finally(() => clearTimeout(timeoutId));
+      
+      if (!response.ok) {
+        // Silent fail - likely server is down or we're offline
+        return;
+      }
+      
       const result = await response.json();
       
-      if (response.ok && result.success) {
+      if (result.success) {
         setUnreadCount(result.data.unreadCount);
         setUnreadByConversation(result.data.unreadByConversation || []);
       }
     } catch (error) {
-      console.error('Error fetching unread messages count:', error);
+      // Only log unexpected errors
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        // Silent fail - timeout
+      } else if (!navigator.onLine) {
+        // Browser reports we're offline - silent fail
+      } else if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        // Server is likely down - silent fail
+      } else {
+        // Log other unexpected errors
+        console.error('Error fetching unread messages count:', error);
+      }
+    } finally {
+      isFetchingRef.current = false;
     }
   }, [session?.user]);
   
@@ -63,95 +92,31 @@ export function MessageNotificationProvider({ children }: { children: React.Reac
     return conversation?.unreadCount || 0;
   };
   
-  // Initialize socket server
-  const initSocketServer = useCallback(async () => {
-    try {
-      const response = await fetch('/api/socket');
-      if (!response.ok) {
-        console.error('Failed to initialize Socket.IO server');
-        return false;
-      }
-      return true;
-    } catch (error) {
-      console.error('Socket server initialization error:', error);
-      return false;
-    }
-  }, []);
-  
   useEffect(() => {
-    // Skip if no user is logged in
     if (!session?.user) return;
     
-    // Clean up existing socket if present
-    if (socketRef.current) {
-      console.log('Cleaning up existing notification socket');
-      socketRef.current.disconnect();
-      socketRef.current = null;
-    }
-    
-    let socketIo: Socket | null = null;
-    
-    const setupSocket = async () => {
-      // First initialize the socket server
-      await initSocketServer();
-      
-      await fetchUnreadCount(); // Initial fetch
-      
-      // Set up socket connection for real-time updates
-      const socketUrl = window.location.origin; // Use same origin to avoid CORS issues
-      
-      socketIo = io(socketUrl, {
-        transports: ['websocket', 'polling'],
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
-        forceNew: true,
-        path: '/api/socketio'
-      });
-      
-      socketRef.current = socketIo;
-      
-      socketIo.on('connect', () => {
-        console.log('Notification socket connected');
-      });
-      
-      socketIo.on('connect_error', (err) => {
-        console.error('Socket connection error:', err);
-        // Try to fetch the count manually as a fallback
-        fetchUnreadCount();
-      });
-      
-      socketIo.on('new-message', () => {
-        fetchUnreadCount();
-      });
-      
-      socketIo.on('messages-read', () => {
-        fetchUnreadCount();
-      });
-      
-      socketIo.on('disconnect', (reason) => {
-        console.log('Notification socket disconnected:', reason);
-        // Try to fetch the count manually as a fallback
-        fetchUnreadCount();
-      });
-    };
-    
-    setupSocket();
-    
-    // Poll for updates as a fallback mechanism, but with a longer interval
-    const intervalId = setInterval(() => {
+    // Initial fetch with a slight delay to allow the app to stabilize
+    const initialFetchTimer = setTimeout(() => {
       fetchUnreadCount();
-    }, 60000); // Check every 60 seconds instead of 30 seconds
+    }, 500);
+    
+    // Use a staggered interval to reduce network congestion
+    const intervalDelay = 10000 + Math.random() * 2000; // 10-12 seconds
+    
+    const intervalId = setInterval(() => {
+      // Only fetch if browser reports we're online
+      if (navigator.onLine) {
+        fetchUnreadCount();
+      }
+    }, intervalDelay);
     
     return () => {
-      if (socketRef.current) {
-        console.log('Disconnecting notification socket on cleanup');
-        socketRef.current.removeAllListeners();
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
+      clearTimeout(initialFetchTimer);
       clearInterval(intervalId);
+      // Reset fetching flag on cleanup to prevent stuck state
+      isFetchingRef.current = false;
     };
-  }, [session?.user, fetchUnreadCount, initSocketServer]);
+  }, [session?.user, fetchUnreadCount]);
   
   return (
     <MessageNotificationContext.Provider 

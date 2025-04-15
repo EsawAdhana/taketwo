@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -10,7 +10,8 @@ import UserProfileModal from '@/components/UserProfileModal';
 import ReportUserModal from '@/components/ReportUserModal';
 import ChatInfoModal from '@/components/ChatInfoModal';
 import { useMessageNotifications } from '@/contexts/MessageNotificationContext';
-import io from 'socket.io-client';
+import { formatDistance } from 'date-fns';
+import ReportModal from '@/components/ReportModal';
 
 interface Participant {
   _id: string;
@@ -58,13 +59,13 @@ export default function ConversationPage({
   const [showMenu, setShowMenu] = useState(false);
   const [showChatInfo, setShowChatInfo] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const socketRef = useRef<any>(null);
-  const lastMessageTimestampRef = useRef<string | null>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [selectedUser, setSelectedUser] = useState<{email: string, name: string, image: string} | null>(null);
   const [loadingUserProfile, setLoadingUserProfile] = useState(false);
   const [userProfile, setUserProfile] = useState<any | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
   const { refreshUnreadCount } = useMessageNotifications();
+  const lastMessageTimestampRef = useRef<string | null>(null);
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
@@ -115,63 +116,142 @@ export default function ConversationPage({
     }
   };
 
-  // Initialize socket connection
-  const initSocketConnection = () => {
-    // Clean up any existing socket
-    if (socketRef.current) {
-      console.log('Cleaning up existing conversation socket');
-      socketRef.current.disconnect();
-      socketRef.current = null;
+  // Remove socket initialization function and create a polling function instead
+  const startPolling = () => {
+    // Clear any existing interval
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
     }
     
-    // Connect to the socket server
-    const socketUrl = process.env.NODE_ENV === 'production' 
-      ? window.location.origin
-      : 'http://localhost:3001';
+    // Flag to prevent overlapping requests
+    let isPolling = false;
+    // Counter for consecutive errors to implement backoff
+    let errorCount = 0;
+    // Default polling interval
+    let pollingInterval = 2000;
+    
+    // Set up polling interval
+    const pollForNewMessages = async () => {
+      // Skip if already polling or missing data
+      if (isPolling || !lastMessageTimestampRef.current || !session?.user?.email) {
+        return;
+      }
       
-    const socketIo = io(socketUrl, {
-      transports: ['websocket', 'polling'],
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-      forceNew: true,
-      path: '/api/socketio'
-    });
-    
-    socketRef.current = socketIo;
-    
-    socketIo.on('connect', () => {
-      console.log('Connected to Socket.IO server', socketIo.id);
-      // Join conversation room
-      socketIo.emit('join-conversation', { conversationId: params.conversationId });
-    });
-    
-    socketIo.on('connect_error', (err) => {
-      console.error('Socket.IO connection error:', err);
-    });
-    
-    socketIo.on('new-message', (messageData) => {
-      console.log('New message received in conversation', messageData);
-      // Check if we have valid message data with a conversation ID
-      if (messageData && messageData.conversationId) {
-        // Check if the message belongs to the current conversation
-        if (messageData.conversationId === params.conversationId) {
-          // Only add messages from other users (to prevent duplicates)
-          // Since we already add our own messages when sending
-          if (messageData.senderId && messageData.senderId._id !== session?.user?.id) {
-            // Add the new message to the list
-            setMessages(prev => [...prev, messageData]);
-            scrollToBottom();
-            // Mark the message as read
-            markMessageAsRead(messageData._id);
+      try {
+        isPolling = true;
+        const controller = new AbortController();
+        // Set timeout to 3 seconds
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        
+        const response = await fetch(
+          `/api/messages/poll?conversationId=${params.conversationId}&lastMessageTimestamp=${encodeURIComponent(lastMessageTimestampRef.current)}`, 
+          {
+            // Add cache control to prevent duplicate requests
+            cache: 'no-store',
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            },
+            signal: controller.signal
+          }
+        ).finally(() => clearTimeout(timeoutId));
+        
+        if (!response.ok) {
+          // Silent fail - don't log every failed request when server is down
+          errorCount++;
+          return;
+        }
+        
+        // Reset error count on successful response
+        errorCount = 0;
+        
+        const result = await response.json();
+        
+        if (result.success && result.data.length > 0) {
+          // Add the new messages to our list
+          const newMessages = result.data;
+          
+          setMessages(prev => {
+            // Avoid duplicates by checking IDs
+            const currentMessageIds = new Set(prev.map((msg: Message) => msg._id));
+            const uniqueNewMessages = newMessages.filter((msg: Message) => !currentMessageIds.has(msg._id));
+            
+            if (uniqueNewMessages.length > 0) {
+              const updatedMessages = [...prev, ...uniqueNewMessages];
+              
+              // Update last message timestamp
+              if (uniqueNewMessages.length > 0) {
+                const latestMessage = uniqueNewMessages[uniqueNewMessages.length - 1];
+                lastMessageTimestampRef.current = latestMessage.createdAt;
+                
+                // Mark new messages as read
+                for (const message of uniqueNewMessages) {
+                  // Get the current user's email from session
+                  const currentUserEmail = session?.user?.email;
+                  // Only mark messages as read if they're not from the current user
+                  if (message.senderId._id !== currentUserEmail) {
+                    markMessageAsRead(message._id);
+                  }
+                }
+                
+                // Scroll to bottom when new messages arrive
+                scrollToBottom();
+              }
+              
+              return updatedMessages;
+            }
+            
+            return prev;
+          });
+        }
+      } catch (error) {
+        // Only log if it's not an abort error or network error (when server is down)
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          // Silent fail - request timed out
+          errorCount++;
+        } else if (!navigator.onLine) {
+          // Browser reports we're offline - silent fail
+          errorCount++;
+        } else if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+          // Server is likely down - silent fail
+          errorCount++;
+        } else {
+          // Log other unexpected errors
+          console.error('Error polling for new messages:', error);
+          errorCount++;
+        }
+      } finally {
+        isPolling = false;
+        
+        // Implement exponential backoff if we have consecutive errors
+        if (errorCount > 0) {
+          // Recalculate polling interval with exponential backoff
+          // Cap at 30 seconds max interval
+          const maxBackoff = 30000;
+          pollingInterval = Math.min(2000 * Math.pow(1.5, errorCount - 1), maxBackoff);
+          
+          // Reset the polling interval
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = setInterval(pollForNewMessages, pollingInterval);
           }
         }
-      } else {
-        // This is likely just a notification without data, refresh messages
-        fetchMessages();
       }
-    });
+    };
     
-    return socketIo;
+    // Poll immediately, then set interval
+    pollForNewMessages();
+    
+    // Set interval to poll
+    pollingIntervalRef.current = setInterval(pollForNewMessages, pollingInterval);
+    
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
   };
 
   // Mark a specific message as read
@@ -186,13 +266,6 @@ export default function ConversationPage({
           messageId,
           conversationId: params.conversationId,
         }),
-      });
-      
-      // Emit socket event for message read
-      socketRef.current?.emit('message-read', {
-        messageId,
-        conversationId: params.conversationId,
-        userId: session?.user?.id
       });
       
       refreshUnreadCount();
@@ -236,12 +309,6 @@ export default function ConversationPage({
         )
       );
       
-      // Emit socket event that all messages were read
-      socketRef.current?.emit('messages-read', {
-        conversationId: params.conversationId,
-        userId: session?.user?.id
-      });
-      
       // Refresh unread count after marking messages as read
       refreshUnreadCount();
     } catch (error) {
@@ -277,12 +344,6 @@ export default function ConversationPage({
         
         // Update the last message timestamp
         lastMessageTimestampRef.current = result.data.createdAt;
-        
-        // Emit the message via socket
-        socketRef.current?.emit('send-message', {
-          ...result.data,
-          conversationId: params.conversationId
-        });
         
         scrollToBottom();
       } else {
@@ -376,7 +437,6 @@ export default function ConversationPage({
     setShowReportModal(false);
   };
 
-  // Initialize the conversation
   useEffect(() => {
     if (!session) {
       router.push('/');
@@ -386,21 +446,21 @@ export default function ConversationPage({
     fetchConversation();
     fetchMessages();
     
-    // Initialize socket connection instead of polling
-    const socket = initSocketConnection();
+    // Initialize polling instead of socket connection
+    const cleanupPolling = startPolling();
     
     // Mark messages as read when the conversation is loaded
     markMessagesAsRead();
     
     return () => {
-      // Disconnect socket when component unmounts
-      if (socketRef.current) {
-        console.log('Disconnecting conversation socket on unmount');
-        socketRef.current.emit('leave-conversation', { conversationId: params.conversationId });
-        socketRef.current.removeAllListeners();
-        socketRef.current.disconnect();
-        socketRef.current = null;
+      // Clean up polling when component unmounts
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
       }
+      
+      // Call the cleanup function returned by startPolling
+      if (cleanupPolling) cleanupPolling();
     };
   }, [session, params.conversationId, router]);
 

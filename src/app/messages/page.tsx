@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSession } from 'next-auth/react';
-import { io } from 'socket.io-client';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -32,7 +31,7 @@ export default function MessagesPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [socket, setSocket] = useState<any>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { refreshUnreadCount, hasUnreadMessages, unreadByConversation } = useMessageNotifications();
 
@@ -48,93 +47,146 @@ export default function MessagesPage() {
     // Fetch conversations initially
     fetchConversations();
     
-    // Initialize socket connection
-    const initSocket = async () => {
-      try {
-        // Clean up existing socket if present
-        if (socket) {
-          console.log('Cleaning up existing messages page socket');
-          socket.disconnect();
-          setSocket(null);
-        }
-        
-        // Initialize the socket.io server first
-        const response = await fetch('/api/socket');
-        if (!response.ok) {
-          console.error('Failed to initialize Socket.IO server');
-          return;
-        }
-
-        // Connect to the socket server
-        const socketUrl = window.location.origin; // Use same origin to avoid CORS issues
-        
-        const socketIo = io(socketUrl, {
-          transports: ['websocket', 'polling'],
-          reconnectionAttempts: 5,
-          reconnectionDelay: 1000,
-          forceNew: true,
-          path: '/api/socketio'
-        });
-        
-        setSocket(socketIo);
-
-        socketIo.on('connect', () => {
-          console.log('Connected to Socket.IO server');
-        });
-
-        socketIo.on('connect_error', (err) => {
-          console.error('Socket.IO connection error:', err);
-          // Try to fetch conversations manually as a fallback
-          fetchConversations();
-        });
-
-        socketIo.on('new-message', () => {
-          fetchConversations();
-          refreshUnreadCount();
-        });
-        
-        socketIo.on('messages-read', () => {
-          fetchConversations();
-        });
-
-        return socketIo;
-      } catch (error) {
-        console.error('Socket initialization error:', error);
-        return null;
+    // Start polling for conversations
+    const startPolling = () => {
+      // Clear any existing interval
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
       }
+      
+      // Flag to prevent overlapping requests
+      let isPolling = false;
+      // Counter for consecutive errors to implement backoff
+      let errorCount = 0;
+      // Default polling interval
+      let pollingInterval = 5000; 
+      
+      // Set interval to fetch conversations
+      const pollForConversations = async () => {
+        // Skip if already polling
+        if (isPolling) return;
+        
+        try {
+          isPolling = true;
+          const controller = new AbortController();
+          // Set timeout to 3 seconds
+          const timeoutId = setTimeout(() => controller.abort(), 3000);
+          
+          // Wrap fetchConversations in a timeout
+          const fetchWithTimeout = async () => {
+            const response = await fetch('/api/conversations', {
+              cache: 'no-store',
+              headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache'
+              },
+              signal: controller.signal
+            });
+            
+            if (!response.ok) {
+              throw new Error(`Failed to fetch conversations: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            if (result.success && result.data) {
+              setConversations(result.data);
+            } else {
+              throw new Error('Invalid response format');
+            }
+          };
+          
+          await fetchWithTimeout().finally(() => clearTimeout(timeoutId));
+          await refreshUnreadCount();
+          
+          // Reset error count on success
+          errorCount = 0;
+        } catch (error) {
+          // Handle errors silently when likely offline
+          if (error instanceof DOMException && error.name === 'AbortError') {
+            // Silent fail - request timed out
+            errorCount++;
+          } else if (!navigator.onLine) {
+            // Browser reports we're offline - silent fail
+            errorCount++;
+          } else if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+            // Server is likely down - silent fail
+            errorCount++;
+          } else {
+            // Log other unexpected errors
+            console.error('Error in polling cycle:', error);
+            errorCount++;
+          }
+        } finally {
+          isPolling = false;
+          
+          // Implement exponential backoff if we have consecutive errors
+          if (errorCount > 0) {
+            // Recalculate polling interval with exponential backoff
+            // Cap at 60 seconds max interval
+            const maxBackoff = 60000;
+            pollingInterval = Math.min(5000 * Math.pow(1.5, errorCount - 1), maxBackoff);
+            
+            // Reset the polling interval
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = setInterval(pollForConversations, pollingInterval);
+            }
+          }
+        }
+      };
+      
+      // Poll immediately
+      pollForConversations();
+      
+      // Then set interval
+      pollingIntervalRef.current = setInterval(pollForConversations, pollingInterval);
+      
+      return () => {
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+      };
     };
-
-    const socketInstance = initSocket();
+    
+    // Start polling
+    const cleanupPolling = startPolling();
     
     return () => {
-      if (socket) {
-        console.log('Disconnecting messages page socket on unmount');
-        socket.removeAllListeners();
-        socket.disconnect();
-        setSocket(null);
+      // Clean up polling on unmount
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
       }
+      
+      // Call cleanup function
+      if (cleanupPolling) cleanupPolling();
     };
   }, [session, refreshUnreadCount]);
 
   const fetchConversations = async () => {
     try {
-      const response = await fetch('/api/conversations');
+      const response = await fetch('/api/conversations', {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      });
+      
+      if (!response.ok) {
+        return;
+      }
+      
       const result = await response.json();
       if (result.success && result.data) {
         setConversations(result.data);
-      } else {
-        // ... existing code ...
       }
     } catch (error) {
-      // ... existing code ...
+      // Silently fail for initial fetch
     }
   };
-
-  useEffect(() => {
-    if (session?.user) {
-      fetchConversations();
-    }
-  }, [session]);
 
   const getConversationName = (conversation: Conversation) => {
     if (conversation.isGroup) {
