@@ -66,6 +66,8 @@ export default function ConversationPage({
   const [showReportModal, setShowReportModal] = useState(false);
   const { refreshUnreadCount } = useMessageNotifications();
   const lastMessageTimestampRef = useRef<string | null>(null);
+  const { socket, isConnected, joinConversation, leaveConversation, sendMessage: socketSendMessage } = useSocket();
+  const shouldMarkAsRead = useRef(true);
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
@@ -307,6 +309,11 @@ export default function ConversationPage({
       const result = await response.json();
       
       if (response.ok && result.success) {
+        // Emit socket event for conversation deletion
+        if (isConnected && socket) {
+          socket.emit('delete-conversation', params.conversationId);
+        }
+        
         // Redirect to the messages page after successful deletion
         router.push('/messages');
       } else {
@@ -372,6 +379,82 @@ export default function ConversationPage({
     setShowReportModal(false);
   };
 
+  // Setup socket connections and event listeners
+  useEffect(() => {
+    if (!isConnected || !session?.user?.email || !params.conversationId) return;
+    
+    // Track if we're currently processing a message to avoid loops
+    let isProcessingMessage = false;
+    
+    // Join the conversation room
+    joinConversation(params.conversationId);
+    
+    // Listen for new messages
+    socket?.on('new-message', (message) => {
+      if (message.conversationId === params.conversationId && !isProcessingMessage) {
+        isProcessingMessage = true;
+        
+        // Add the message to our list if it's for this conversation
+        setMessages(prev => {
+          // Check if we already have this message to avoid duplicates
+          const messageExists = prev.some(m => m._id === message._id);
+          if (messageExists) {
+            isProcessingMessage = false;
+            return prev;
+          }
+          
+          // Add the new message
+          const updatedMessages = [...prev, message];
+          
+          // Mark the message as read if it's not from us
+          if (session?.user?.email && message.senderId._id !== session.user.email) {
+            // Use setTimeout to prevent state updates during render
+            setTimeout(() => {
+              markMessageAsRead(message._id);
+              isProcessingMessage = false;
+            }, 0);
+          } else {
+            isProcessingMessage = false;
+          }
+          
+          return updatedMessages;
+        });
+        
+        // Scroll to the bottom when new messages arrive
+        scrollToBottom();
+      }
+    });
+    
+    // Listen for message read events
+    socket?.on('message-read', (data) => {
+      if (data.conversationId === params.conversationId) {
+        // Update the message's read status
+        setMessages(prev => 
+          prev.map(msg => 
+            msg._id === data.messageId
+              ? { 
+                  ...msg, 
+                  readBy: msg.readBy.some(reader => reader._id === data.userId) 
+                    ? msg.readBy 
+                    : [...msg.readBy, { _id: data.userId, name: data.userName, image: data.userImage }]
+                }
+              : msg
+          )
+        );
+      }
+    });
+    
+    // Clean up on unmount
+    return () => {
+      // Leave the conversation room
+      leaveConversation(params.conversationId);
+      
+      // Remove event listeners
+      socket?.off('new-message');
+      socket?.off('message-read');
+    };
+  }, [isConnected, socket, session?.user?.email, params.conversationId, joinConversation, leaveConversation]);
+
   useEffect(() => {
     if (!session) {
       router.push('/');
@@ -395,12 +478,14 @@ export default function ConversationPage({
     }
   }, [messages]);
 
-  // Mark messages as read when new messages are received
+  // Mark messages as read when viewing the conversation
   useEffect(() => {
-    if (messages.length > 0) {
+    if (messages.length > 0 && session?.user && shouldMarkAsRead.current) {
+      // Only mark messages as read on initial load
       markMessagesAsRead();
+      shouldMarkAsRead.current = false;
     }
-  }, [messages]);
+  }, [messages, session?.user]); // Include messages in deps but use the ref to prevent infinite loops
 
   // Effect to close the participants menu when clicking outside of it
   useEffect(() => {

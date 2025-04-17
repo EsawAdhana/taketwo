@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
+import { useSocket } from './SocketContext';
 
 interface UnreadConversation {
   conversationId: string;
@@ -26,6 +27,7 @@ export function MessageNotificationProvider({ children }: { children: React.Reac
   const { data: session } = useSession();
   const pathname = usePathname();
   const isFetchingRef = useRef(false);
+  const { socket, isConnected } = useSocket();
   
   const fetchUnreadCount = useCallback(async () => {
     if (!session?.user || isFetchingRef.current) return;
@@ -92,6 +94,52 @@ export function MessageNotificationProvider({ children }: { children: React.Reac
     return conversation?.unreadCount || 0;
   };
   
+  // Listen for socket events related to messages and notifications
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+    
+    // Listen for new messages
+    socket.on('new-message', (message) => {
+      // If the message is not from the current user and we're not on the message page,
+      // increment the unread count for that conversation
+      if (message.senderId._id !== session?.user?.email) {
+        // Check if we're not currently viewing the conversation
+        if (!pathname.includes(`/messages/${message.conversationId}`)) {
+          setUnreadCount(prev => prev + 1);
+          
+          // Update unread by conversation
+          setUnreadByConversation(prev => {
+            const index = prev.findIndex(item => item.conversationId === message.conversationId);
+            if (index >= 0) {
+              const newArray = [...prev];
+              newArray[index] = {
+                ...newArray[index],
+                unreadCount: newArray[index].unreadCount + 1
+              };
+              return newArray;
+            } else {
+              return [...prev, { conversationId: message.conversationId, unreadCount: 1 }];
+            }
+          });
+        }
+      }
+    });
+    
+    // Listen for message read events
+    socket.on('message-read', (data) => {
+      if (data.userId !== session?.user?.email) {
+        // Update the unread counts if needed
+        refreshUnreadCount();
+      }
+    });
+    
+    return () => {
+      socket.off('new-message');
+      socket.off('message-read');
+    };
+  }, [socket, isConnected, session?.user?.email, pathname, refreshUnreadCount]);
+  
+  // Initial fetch of unread counts
   useEffect(() => {
     if (!session?.user) return;
     
@@ -100,21 +148,8 @@ export function MessageNotificationProvider({ children }: { children: React.Reac
       fetchUnreadCount();
     }, 500);
     
-    // Use a staggered interval to reduce network congestion
-    const intervalDelay = 10000 + Math.random() * 2000; // 10-12 seconds
-    
-    const intervalId = setInterval(() => {
-      // Only fetch if browser reports we're online
-      if (navigator.onLine) {
-        fetchUnreadCount();
-      }
-    }, intervalDelay);
-    
     return () => {
       clearTimeout(initialFetchTimer);
-      clearInterval(intervalId);
-      // Reset fetching flag on cleanup to prevent stuck state
-      isFetchingRef.current = false;
     };
   }, [session?.user, fetchUnreadCount]);
   

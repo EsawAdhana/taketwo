@@ -34,6 +34,7 @@ export default function MessagesPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { refreshUnreadCount, hasUnreadMessages, unreadByConversation } = useMessageNotifications();
+  const { socket, isConnected, joinConversation } = useSocket();
 
   // Custom function to get unread count since the context one isn't working
   const getUnreadCount = (conversationId: string) => {
