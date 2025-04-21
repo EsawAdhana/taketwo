@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
+import { query, where, messagesCollection, onSnapshot, Timestamp } from '@/lib/firebase';
+import { getUnreadMessages } from '@/lib/firebaseService';
 
 interface UnreadConversation {
   conversationId: string;
@@ -13,7 +15,7 @@ interface MessageNotificationContextType {
   unreadCount: number;
   unreadByConversation: UnreadConversation[];
   refreshUnreadCount: () => Promise<void>;
-  decrementUnreadCount: () => void;
+  decrementUnreadCount: (conversationId: string) => void;
   hasUnreadMessages: (conversationId: string) => boolean;
   getUnreadCount: (conversationId: string) => number;
 }
@@ -26,59 +28,79 @@ export function MessageNotificationProvider({ children }: { children: React.Reac
   const { data: session } = useSession();
   const pathname = usePathname();
   const isFetchingRef = useRef(false);
+  const unsubscribeRef = useRef<() => void | null>(null);
   
   const fetchUnreadCount = useCallback(async () => {
-    if (!session?.user || isFetchingRef.current) return;
+    if (!session?.user?.email || isFetchingRef.current) return;
     
     try {
       isFetchingRef.current = true;
-      const controller = new AbortController();
-      // Set timeout to prevent long-hanging requests
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
       
-      const response = await fetch('/api/messages/unread?detailed=true', {
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache'
-        },
-        signal: controller.signal
-      }).finally(() => clearTimeout(timeoutId));
+      // Use Firebase service to get unread messages
+      const unreadData = await getUnreadMessages(session.user.email);
       
-      if (!response.ok) {
-        // Silent fail - likely server is down or we're offline
-        return;
-      }
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        setUnreadCount(result.data.unreadCount);
-        setUnreadByConversation(result.data.unreadByConversation || []);
-      }
+      setUnreadCount(unreadData.total);
+      setUnreadByConversation(unreadData.byConversation);
     } catch (error) {
-      // Only log unexpected errors
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        // Silent fail - timeout
-      } else if (!navigator.onLine) {
-        // Browser reports we're offline - silent fail
-      } else if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        // Server is likely down - silent fail
-      } else {
-        // Log other unexpected errors
-        console.error('Error fetching unread messages count:', error);
-      }
+      console.error('Error fetching unread messages count:', error);
     } finally {
       isFetchingRef.current = false;
     }
-  }, [session?.user]);
+  }, [session?.user?.email]);
+  
+  const setupRealtimeUnreadMessages = useCallback(() => {
+    if (!session?.user?.email) return;
+    
+    // Clean up any existing subscription
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+      unsubscribeRef.current = null;
+    }
+    
+    try {
+      // Set up a real-time listener for messages
+      const q = query(
+        messagesCollection,
+        where('senderId', '!=', session.user.email)
+      );
+      
+      const unsubscribe = onSnapshot(q, async () => {
+        // When we get updates, fetch the current unread state
+        await fetchUnreadCount();
+      }, (error) => {
+        console.error('Error in real-time unread messages listener:', error);
+      });
+      
+      unsubscribeRef.current = unsubscribe;
+      return unsubscribe;
+    } catch (error) {
+      console.error('Error setting up real-time unread messages:', error);
+    }
+  }, [session?.user?.email, fetchUnreadCount]);
   
   const refreshUnreadCount = async () => {
     await fetchUnreadCount();
   };
   
-  const decrementUnreadCount = () => {
-    setUnreadCount(prev => Math.max(0, prev - 1));
+  const decrementUnreadCount = (conversationId: string) => {
+    // Update unread count state
+    setUnreadByConversation(prev => {
+      const updatedConversations = prev.map(conv => {
+        if (conv.conversationId === conversationId) {
+          return {
+            ...conv,
+            unreadCount: Math.max(0, conv.unreadCount - 1)
+          };
+        }
+        return conv;
+      });
+      
+      // Recalculate total
+      const newTotal = updatedConversations.reduce((total, conv) => total + conv.unreadCount, 0);
+      setUnreadCount(newTotal);
+      
+      return updatedConversations;
+    });
   };
   
   const hasUnreadMessages = (conversationId: string) => {
@@ -93,30 +115,25 @@ export function MessageNotificationProvider({ children }: { children: React.Reac
   };
   
   useEffect(() => {
-    if (!session?.user) return;
+    if (!session?.user?.email) return;
     
-    // Initial fetch with a slight delay to allow the app to stabilize
-    const initialFetchTimer = setTimeout(() => {
-      fetchUnreadCount();
-    }, 500);
+    // Initial fetch
+    fetchUnreadCount();
     
-    // Use a staggered interval to reduce network congestion
-    const intervalDelay = 10000 + Math.random() * 2000; // 10-12 seconds
-    
-    const intervalId = setInterval(() => {
-      // Only fetch if browser reports we're online
-      if (navigator.onLine) {
-        fetchUnreadCount();
-      }
-    }, intervalDelay);
+    // Set up real-time listener
+    const unsubscribe = setupRealtimeUnreadMessages();
     
     return () => {
-      clearTimeout(initialFetchTimer);
-      clearInterval(intervalId);
-      // Reset fetching flag on cleanup to prevent stuck state
-      isFetchingRef.current = false;
+      // Clean up on unmount
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+      if (unsubscribe) {
+        unsubscribe();
+      }
     };
-  }, [session?.user, fetchUnreadCount]);
+  }, [session?.user?.email, fetchUnreadCount, setupRealtimeUnreadMessages]);
   
   return (
     <MessageNotificationContext.Provider 

@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { connectDB } from '@/lib/mongodb';
-import User from '@/models/User';
-import mongoose from 'mongoose';
+import { usersCollection, doc, getDoc } from '@/lib/firebase';
 
 export async function GET(req: Request) {
   try {
@@ -19,23 +17,19 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'User ID is required', success: false }, { status: 400 });
     }
 
-    await connectDB();
+    // In Firebase, the document ID is typically the email or a custom ID
+    // Get the user document from Firestore
+    const userDoc = await getDoc(doc(usersCollection, userId));
 
-    // Make sure the userId is valid
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-      return NextResponse.json({ error: 'Invalid user ID format', success: false }, { status: 400 });
-    }
-
-    // Find the user by their ID
-    const user = await User.findById(userId).select('email');
-
-    if (!user) {
+    if (!userDoc.exists()) {
       return NextResponse.json({ error: 'User not found', success: false }, { status: 404 });
     }
 
+    const userData = userDoc.data();
+
     return NextResponse.json({ 
       success: true, 
-      email: user.email
+      email: userData.email
     });
   } catch (error) {
     console.error('Error retrieving user email:', error);

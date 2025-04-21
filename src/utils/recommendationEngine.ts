@@ -1,6 +1,21 @@
 import { SurveyFormData, Preference, PreferenceStrength } from '@/constants/survey-constants';
-import { WithId, Document } from 'mongodb';
 import openai from '@/lib/openai';
+import {
+  db,
+  surveysCollection,
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  Timestamp,
+  doc,
+  getDoc
+} from '@/lib/firebase';
+
+// Add a references to test_surveys collection
+const testSurveysCollection = collection(db, 'test_surveys');
+const blocksCollection = collection(db, 'blocks');
 
 interface CompatibilityScore {
   userEmail: string;
@@ -33,25 +48,28 @@ const PREFERENCE_VALUES: Record<PreferenceStrength, number> = {
   'must have': 4
 };
 
-// Convert MongoDB document to SurveyFormData
-function documentToSurveyData(doc: WithId<Document>): SurveyFormData {
+// Convert Firestore document to SurveyFormData
+function documentToSurveyData(doc: any): SurveyFormData {
+  // Extract the data from Firestore document
+  const data = doc.data ? doc.data() : doc;
+  
   return {
-    firstName: doc.firstName || '',
-    gender: doc.gender || '',
-    roomWithDifferentGender: !!doc.roomWithDifferentGender,
-    housingRegion: doc.housingRegion || '',
-    housingCities: Array.isArray(doc.housingCities) ? doc.housingCities : [],
-    internshipStartDate: doc.internshipStartDate || '',
-    internshipEndDate: doc.internshipEndDate || '',
-    desiredRoommates: doc.desiredRoommates || '1',
-    minBudget: typeof doc.minBudget === 'number' ? doc.minBudget : 1000,
-    maxBudget: typeof doc.maxBudget === 'number' ? doc.maxBudget : 1500,
-    preferences: Array.isArray(doc.preferences) ? doc.preferences : [],
-    additionalNotes: doc.additionalNotes || '',
-    currentPage: typeof doc.currentPage === 'number' ? doc.currentPage : 1,
-    isDraft: !!doc.isDraft,
-    isSubmitted: !!doc.isSubmitted,
-    userEmail: doc.userEmail || '',
+    firstName: data.firstName || '',
+    gender: data.gender || '',
+    roomWithDifferentGender: !!data.roomWithDifferentGender,
+    housingRegion: data.housingRegion || '',
+    housingCities: Array.isArray(data.housingCities) ? data.housingCities : [],
+    internshipStartDate: data.internshipStartDate || '',
+    internshipEndDate: data.internshipEndDate || '',
+    desiredRoommates: data.desiredRoommates || '1',
+    minBudget: typeof data.minBudget === 'number' ? data.minBudget : 1000,
+    maxBudget: typeof data.maxBudget === 'number' ? data.maxBudget : 1500,
+    preferences: Array.isArray(data.preferences) ? data.preferences : [],
+    additionalNotes: data.additionalNotes || '',
+    currentPage: typeof data.currentPage === 'number' ? data.currentPage : 1,
+    isDraft: !!data.isDraft,
+    isSubmitted: !!data.isSubmitted,
+    userEmail: data.userEmail || '',
   } as SurveyFormData;
 }
 
@@ -553,64 +571,74 @@ export async function getRecommendedMatches(
   useEnhancedScoring: boolean = true,
   showTestUsers: boolean = false
 ): Promise<CompatibilityScore[]> {
-  // Database connection
-  const client = (await import('@/lib/mongodb')).default;
-  const mongodb = await client;
-  const db = mongodb.db('monkeyhouse');
-
   // First try to get the user's survey data from regular surveys
-  let userSurvey = await db.collection('surveys').findOne({ userEmail });
-  const isTestUser = !userSurvey;
+  let userSurveyDoc = await getDoc(doc(surveysCollection, userEmail));
+  const isTestUser = !userSurveyDoc.exists();
   
   // If not found in regular surveys, check test_surveys
-  if (!userSurvey) {
-    userSurvey = await db.collection('test_surveys').findOne({ userEmail });
+  if (!userSurveyDoc.exists()) {
+    userSurveyDoc = await getDoc(doc(testSurveysCollection, userEmail));
   }
   
-  if (!userSurvey) {
+  if (!userSurveyDoc.exists()) {
     return [];
   }
   
   // Convert to survey data format
-  const userData = documentToSurveyData(userSurvey);
+  const userData = documentToSurveyData(userSurveyDoc);
   
   // Get all other users' survey data
-  let otherUsersSurveys;
+  let otherUsersSurveys = [];
   
   // If specific emails are provided, only get those
   if (filterEmails && filterEmails.length > 0) {
-    // Check both collections when looking for specific users
-    const regularSurveys = await db.collection('surveys')
-      .find({ 
-        userEmail: { $in: filterEmails },
-        isSubmitted: true 
-      })
-      .toArray();
-      
-    const testSurveys = showTestUsers ? await db.collection('test_surveys')
-      .find({ 
-        userEmail: { $in: filterEmails },
-        isSubmitted: true 
-      })
-      .toArray() : [];
-      
+    // Regular surveys for specific emails
+    const regularSurveysQuery = query(
+      surveysCollection,
+      where('isSubmitted', '==', true),
+      where('userEmail', 'in', filterEmails)
+    );
+    const regularSurveysSnapshot = await getDocs(regularSurveysQuery);
+    const regularSurveys = regularSurveysSnapshot.docs;
+    
+    // Test surveys for specific emails (if showTestUsers is true)
+    let testSurveys = [];
+    if (showTestUsers) {
+      const testSurveysQuery = query(
+        testSurveysCollection,
+        where('isSubmitted', '==', true),
+        where('userEmail', 'in', filterEmails)
+      );
+      const testSurveysSnapshot = await getDocs(testSurveysQuery);
+      testSurveys = testSurveysSnapshot.docs;
+    }
+    
     otherUsersSurveys = [...regularSurveys, ...(showTestUsers ? testSurveys : [])];
   } else {
-    // Get surveys based on showTestUsers parameter
-    const regularSurveys = await db.collection('surveys')
-      .find({ 
-        userEmail: { $ne: userEmail },
-        isSubmitted: true 
-      })
-      .toArray();
-      
-    const testSurveys = showTestUsers ? await db.collection('test_surveys')
-      .find({ 
-        userEmail: { $ne: userEmail },
-        isSubmitted: true 
-      })
-      .toArray() : [];
-      
+    // Get all surveys except current user
+    // Note: Firestore doesn't support $ne directly, so we'll filter after fetching
+    const regularSurveysQuery = query(
+      surveysCollection,
+      where('isSubmitted', '==', true)
+    );
+    const regularSurveysSnapshot = await getDocs(regularSurveysQuery);
+    const regularSurveys = regularSurveysSnapshot.docs.filter(
+      doc => doc.data().userEmail !== userEmail
+    );
+    
+    // Test surveys (if showTestUsers is true)
+    let testSurveys = [];
+    if (showTestUsers) {
+      const testSurveysQuery = query(
+        testSurveysCollection,
+        where('isSubmitted', '==', true)
+      );
+      const testSurveysSnapshot = await getDocs(testSurveysQuery);
+      testSurveys = testSurveysSnapshot.docs.filter(
+        doc => doc.data().userEmail !== userEmail
+      );
+    }
+    
     otherUsersSurveys = [...regularSurveys, ...(showTestUsers ? testSurveys : [])];
   }
 
@@ -663,22 +691,22 @@ export async function getTopMatchesByRegion(
   showTestUsers: boolean = false
 ): Promise<CompatibilityScore[]> {
   try {
-    const client = (await import('@/lib/mongodb')).default;
-    const mongodb = await client;
-    const db = mongodb.db('monkeyhouse');
-    
     // Get the user's survey data
     let userDoc;
     
     // Check if the user is in the regular surveys collection
-    userDoc = await db.collection('surveys').findOne({ userEmail });
+    const userSurveyDoc = await getDoc(doc(surveysCollection, userEmail));
     
     // If not found, check if it's a test user
-    if (!userDoc) {
-      userDoc = await db.collection('test_surveys').findOne({ userEmail });
+    if (userSurveyDoc.exists()) {
+      userDoc = userSurveyDoc;
+    } else {
+      const testUserSurveyDoc = await getDoc(doc(testSurveysCollection, userEmail));
+      if (!testUserSurveyDoc.exists()) {
+        throw new Error('User survey not found');
+      }
+      userDoc = testUserSurveyDoc;
     }
-    
-    if (!userDoc) throw new Error('User survey not found');
     
     // Convert to SurveyFormData
     const user = documentToSurveyData(userDoc);
@@ -686,32 +714,39 @@ export async function getTopMatchesByRegion(
     // Get all submitted surveys in the specified region except the current user
     let potentialMatchDocs = [];
     
-    // Get regular surveys
-    const regularSurveys = await db.collection('surveys')
-      .find({ 
-        userEmail: { $ne: userEmail },
-        isSubmitted: true,
-        housingRegion: region
-      })
-      .toArray();
-      
-    // Get test surveys if showTestUsers is true
-    const testSurveys = showTestUsers ? await db.collection('test_surveys')
-      .find({ 
-        userEmail: { $ne: userEmail },
-        isSubmitted: true,
-        housingRegion: region
-      })
-      .toArray() : [];
-      
+    // Get regular surveys in the specified region
+    const regularSurveysQuery = query(
+      surveysCollection,
+      where('isSubmitted', '==', true),
+      where('housingRegion', '==', region)
+    );
+    const regularSurveysSnapshot = await getDocs(regularSurveysQuery);
+    const regularSurveys = regularSurveysSnapshot.docs.filter(
+      doc => doc.data().userEmail !== userEmail
+    );
+    
+    // Get test surveys in the specified region if showTestUsers is true
+    let testSurveys = [];
+    if (showTestUsers) {
+      const testSurveysQuery = query(
+        testSurveysCollection,
+        where('isSubmitted', '==', true),
+        where('housingRegion', '==', region)
+      );
+      const testSurveysSnapshot = await getDocs(testSurveysQuery);
+      testSurveys = testSurveysSnapshot.docs.filter(
+        doc => doc.data().userEmail !== userEmail
+      );
+    }
+    
     potentialMatchDocs = [...regularSurveys, ...(showTestUsers ? testSurveys : [])];
     
     // Filter out blocked users
     const nonBlockedDocs = [];
     for (const doc of potentialMatchDocs) {
       const [isSystemBlocked, isIndividuallyBlocked] = await Promise.all([
-        isUserBlocked(doc.userEmail),
-        isUserBlocked(doc.userEmail, userEmail)
+        isUserBlocked(doc.data().userEmail),
+        isUserBlocked(doc.data().userEmail, userEmail)
       ]);
       
       if (!isSystemBlocked && !isIndividuallyBlocked) {
@@ -765,37 +800,33 @@ export async function getTopMatchesByRegion(
  * Check if a user is blocked
  */
 async function isUserBlocked(userEmail: string, currentUserEmail?: string): Promise<boolean> {
-  const client = (await import('@/lib/mongodb')).default;
-  const mongodb = await client;
-  const db = mongodb.db('monkeyhouse');
-  
-  // Check if blocks collection exists
-  const collections = await db.listCollections({ name: 'blocks' }).toArray();
-  if (collections.length === 0) {
-    return false;
-  }
-  
   // Check for system-wide blocks first
-  const systemBlock = await db.collection('blocks').findOne({
-    blockedUserEmail: userEmail,
-    blockedByEmail: 'system',
-    active: true,
-    isSystemBlock: true
-  });
+  const systemBlockQuery = query(
+    blocksCollection,
+    where('blockedUserEmail', '==', userEmail),
+    where('blockedByEmail', '==', 'system'),
+    where('active', '==', true),
+    where('isSystemBlock', '==', true)
+  );
   
-  if (systemBlock) {
+  const systemBlockSnapshot = await getDocs(systemBlockQuery);
+  
+  if (!systemBlockSnapshot.empty) {
     return true;
   }
   
   // If checking for a specific user interaction, check individual blocks
   if (currentUserEmail) {
-    const individualBlock = await db.collection('blocks').findOne({
-      blockedUserEmail: userEmail,
-      blockedByEmail: currentUserEmail,
-      active: true
-    });
+    const individualBlockQuery = query(
+      blocksCollection,
+      where('blockedUserEmail', '==', userEmail),
+      where('blockedByEmail', '==', currentUserEmail),
+      where('active', '==', true)
+    );
     
-    if (individualBlock) {
+    const individualBlockSnapshot = await getDocs(individualBlockQuery);
+    
+    if (!individualBlockSnapshot.empty) {
       return true;
     }
   }
@@ -843,23 +874,21 @@ export async function compareUsers(
     if (user1SystemBlocked || user2SystemBlocked || user1BlockedByUser2 || user2BlockedByUser1) {
       throw new Error('One or both users are blocked');
     }
-
-    const client = (await import('@/lib/mongodb')).default;
-    const mongodb = await client;
-    const db = mongodb.db('monkeyhouse');
     
-    // Determine if this is a test user
-    const isTestUser1 = !await db.collection('surveys').findOne({ userEmail: userEmail1 });
-    const isTestUser2 = !await db.collection('surveys').findOne({ userEmail: userEmail2 });
-    const isTestUser = isTestUser1 || isTestUser2;
+    // Determine if these are test users
+    const user1SurveyDoc = await getDoc(doc(surveysCollection, userEmail1));
+    const user2SurveyDoc = await getDoc(doc(surveysCollection, userEmail2));
+    
+    const isTestUser1 = !user1SurveyDoc.exists();
+    const isTestUser2 = !user2SurveyDoc.exists();
     
     // Get both users' survey data
     const getUserDoc = async (email: string) => {
-      let userDoc = await db.collection('surveys').findOne({ userEmail: email });
-      if (!userDoc) {
-        userDoc = await db.collection('test_surveys').findOne({ userEmail: email });
+      let userDoc = await getDoc(doc(surveysCollection, email));
+      if (!userDoc.exists()) {
+        userDoc = await getDoc(doc(testSurveysCollection, email));
       }
-      if (!userDoc) throw new Error(`User survey not found for email: ${email}`);
+      if (!userDoc.exists()) throw new Error(`User survey not found for email: ${email}`);
       return documentToSurveyData(userDoc);
     };
     

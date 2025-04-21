@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import clientPromise from '@/lib/mongodb';
+import { 
+  db, 
+  collection, 
+  getDocs, 
+  query, 
+  limit 
+} from '@/lib/firebase';
 
 // Only for development
 const ENABLE_DEBUG = process.env.NODE_ENV !== 'production';
@@ -17,28 +23,55 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    const client = await clientPromise;
-    const db = client.db('monkeyhouse');
+    // Define collection references
+    const testSurveysCollection = collection(db, 'test_surveys');
     
     // Get database connection status
     const dbStatus = {
       connected: !!db,
-      dbName: db?.databaseName || null
+      dbName: 'firestore'
     };
     
-    // Get all collections
-    const collections = await db.listCollections().toArray();
-    const collectionNames = collections.map(c => c.name);
+    // Define known collections
+    const collectionsToCheck = [
+      'surveys',
+      'test_surveys',
+      'users',
+      'conversations',
+      'messages',
+      'reports',
+      'blocks',
+      'banned_users'
+    ];
     
-    // Get test survey count
-    const testSurveys = await db.collection('test_surveys').countDocuments();
+    // Check collections
+    const collectionStatus = {};
+    const collectionCounts = {};
+    
+    for (const colName of collectionsToCheck) {
+      try {
+        const colRef = collection(db, colName);
+        const querySnapshot = await getDocs(query(colRef, limit(1)));
+        collectionStatus[colName] = true;
+        
+        // Get full count for test_surveys
+        if (colName === 'test_surveys') {
+          const countSnapshot = await getDocs(colRef);
+          collectionCounts[colName] = countSnapshot.size;
+        }
+      } catch (error) {
+        console.error(`Error checking collection ${colName}:`, error);
+        collectionStatus[colName] = false;
+        collectionCounts[colName] = 0;
+      }
+    }
     
     return NextResponse.json({
       success: true,
       debug: {
         dbConnection: dbStatus,
-        collections: collectionNames,
-        testSurveys
+        collections: Object.keys(collectionStatus).filter(name => collectionStatus[name]),
+        testSurveys: collectionCounts['test_surveys'] || 0
       }
     });
   } catch (error) {

@@ -1,9 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import clientPromise from '@/lib/mongodb';
+import { 
+  db, 
+  collection, 
+  getDocs 
+} from '@/lib/firebase';
 
 // Only for development
 const ENABLE_TEST_ENDPOINT = process.env.NODE_ENV !== 'production';
+
+// Define Firestore collection reference
+const testSurveysCollection = collection(db, 'test_surveys');
 
 export async function GET() {
   // Check if test endpoint is enabled
@@ -25,22 +32,22 @@ export async function GET() {
       );
     }
     
-    const client = await clientPromise;
-    const db = client.db('monkeyhouse');
-    
-    // Get all test users
-    const users = await db.collection('test_surveys').find({}).toArray();
+    // Get all test users from Firestore
+    const usersSnapshot = await getDocs(testSurveysCollection);
     
     // Format the users for the frontend
-    const formattedUsers = users.map(user => ({
-      name: user.name || 'Unknown',
-      email: user.userEmail,
-      region: user.housingRegion,
-      gender: user.gender,
-      city: Array.isArray(user.housingCities) && user.housingCities.length > 0 
-        ? user.housingCities[0] 
-        : 'Unknown'
-    }));
+    const formattedUsers = usersSnapshot.docs.map(doc => {
+      const user = doc.data();
+      return {
+        name: user.name || 'Unknown',
+        email: user.userEmail,
+        region: user.housingRegion,
+        gender: user.gender,
+        city: Array.isArray(user.housingCities) && user.housingCities.length > 0 
+          ? user.housingCities[0] 
+          : 'Unknown'
+      };
+    });
     
     return NextResponse.json({
       success: true,

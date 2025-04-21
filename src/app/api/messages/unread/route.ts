@@ -1,88 +1,39 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { connectDB } from '@/lib/mongodb';
-import Message from '@/models/Message';
-import Conversation from '@/models/Conversation';
-import User from '@/models/User';
+import { getUnreadMessages } from '@/lib/firebaseService';
 
 export async function GET(req: Request) {
   try {
     const session = await getServerSession();
-    if (!session?.user) {
+    
+    if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectDB();
-
-    // Get current user by email
-    const currentUser = await User.findOne({ email: session.user.email });
+    const userEmail = session.user.email;
     
-    if (!currentUser) {
-      return NextResponse.json({ error: 'Current user not found' }, { status: 404 });
-    }
+    // Get unread messages for user
+    const unreadMessages = await getUnreadMessages(userEmail);
     
-    const userId = currentUser._id;
+    // Format response with counts by conversation
+    const unreadCounts: Record<string, number> = {};
     
-    // Check if detailed counts per conversation are requested
-    const { searchParams } = new URL(req.url);
-    const detailed = searchParams.get('detailed') === 'true';
-
-    // Find conversations the user is part of
-    const conversations = await Conversation.find({
-      participants: userId
-    });
-
-    if (!conversations.length) {
-      return NextResponse.json({ 
-        success: true, 
-        data: { 
-          unreadCount: 0,
-          unreadByConversation: detailed ? [] : undefined
-        } 
-      });
-    }
-
-    const conversationIds = conversations.map(conv => conv._id);
-
-    // Count unread messages across all conversations
-    const unreadCount = await Message.countDocuments({
-      conversationId: { $in: conversationIds },
-      senderId: { $ne: userId },
-      readBy: { $not: { $elemMatch: { $eq: userId } } }
+    unreadMessages.forEach(msg => {
+      const convId = msg.conversationId;
+      if (!unreadCounts[convId]) {
+        unreadCounts[convId] = 0;
+      }
+      unreadCounts[convId]++;
     });
     
-    // If detailed counts are requested, get unread count per conversation
-    let unreadByConversation;
-    
-    if (detailed) {
-      const results = await Promise.all(
-        conversationIds.map(async (conversationId) => {
-          const count = await Message.countDocuments({
-            conversationId,
-            senderId: { $ne: userId },
-            readBy: { $not: { $elemMatch: { $eq: userId } } }
-          });
-          
-          return {
-            conversationId,
-            unreadCount: count
-          };
-        })
-      );
-      
-      // Filter out conversations with no unread messages
-      unreadByConversation = results.filter(item => item.unreadCount > 0);
-    }
+    const result = {
+      totalUnread: unreadMessages.length,
+      byConversation: unreadCounts
+    };
 
-    return NextResponse.json({ 
-      success: true, 
-      data: { 
-        unreadCount,
-        unreadByConversation
-      } 
-    });
+    return NextResponse.json({ success: true, data: result });
   } catch (error) {
-    console.error('Error fetching unread messages count:', error);
+    console.error('Error fetching unread messages:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 } 

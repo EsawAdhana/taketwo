@@ -1,77 +1,51 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { connectDB } from '@/lib/mongodb';
-import Message from '@/models/Message';
-import Conversation from '@/models/Conversation';
-import User from '@/models/User';
-import mongoose from 'mongoose';
+import {
+  markMessageAsRead,
+  getConversation
+} from '@/lib/firebaseService';
 
 export async function POST(req: Request) {
   try {
     const session = await getServerSession();
-    if (!session?.user) {
+    
+    if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectDB();
-
+    const userEmail = session.user.email;
     const { messageId, conversationId } = await req.json();
-
-    if (!messageId || !conversationId) {
-      return NextResponse.json({ error: 'Message ID and Conversation ID are required' }, { status: 400 });
-    }
-
-    // Get current user by email since session.user.id might be undefined
-    const currentUser = await User.findOne({ email: session.user.email });
     
-    if (!currentUser) {
-      return NextResponse.json({ error: 'Current user not found' }, { status: 404 });
+    if (!messageId) {
+      return NextResponse.json({ error: 'Message ID is required' }, { status: 400 });
     }
     
-    const userId = currentUser._id;
-
+    if (!conversationId) {
+      return NextResponse.json({ error: 'Conversation ID is required' }, { status: 400 });
+    }
+    
     // Verify user is part of the conversation
-    const conversation = await Conversation.findById(conversationId);
+    const conversation = await getConversation(conversationId);
+    
     if (!conversation) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
     }
     
-    // Check if user is part of conversation participants
-    const isParticipant = conversation.participants.some((p: unknown) => 
-      p !== null && p !== undefined && p.toString() === userId.toString()
-    );
+    // Check if user is a participant
+    const participants = Array.isArray(conversation.participants) 
+      ? conversation.participants.map((p: any) => typeof p === 'string' ? p : p._id || p.email)
+      : [];
     
-    if (!isParticipant) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!participants.includes(userEmail)) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
-
-    // Find the message
-    const message = await Message.findById(messageId);
-    if (!message) {
-      return NextResponse.json({ error: 'Message not found' }, { status: 404 });
-    }
-
-    // Check if user already read the message
-    const hasRead = message.readBy.some((id: unknown) => 
-      id !== null && id !== undefined && id.toString() === userId.toString()
-    );
-    if (hasRead) {
-      return NextResponse.json({ success: true, data: message });
-    }
-
-    // Add user to readBy array
-    await Message.findByIdAndUpdate(
-      messageId, 
-      { $addToSet: { readBy: userId } },
-      { new: true }
-    );
+    
+    // Mark message as read
+    await markMessageAsRead(messageId, userEmail);
     
     return NextResponse.json({ success: true });
-  } catch (error: unknown) {
+  } catch (error) {
     console.error('Error marking message as read:', error);
-    return NextResponse.json({ 
-      error: 'Internal Server Error',
-      message: error instanceof Error ? error.message : 'Unknown error occurred'
-    }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 } 

@@ -1,7 +1,20 @@
 import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
-import clientPromise from '@/lib/mongodb';
 import { NextRequest } from 'next/server';
+import { 
+  db, 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  doc, 
+  getDoc, 
+  deleteDoc,
+  usersCollection,
+  surveysCollection,
+  conversationsCollection,
+  messagesCollection
+} from '@/lib/firebase';
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,15 +38,10 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const client = await clientPromise;
-    const db = client.db('monkeyhouse');
-
     // Find the user's survey data
-    const surveyData = await db.collection('surveys').findOne({
-      userEmail: email
-    });
+    const surveyDoc = await getDoc(doc(surveysCollection, email));
 
-    if (!surveyData) {
+    if (!surveyDoc.exists()) {
       return NextResponse.json(
         { error: 'No survey data found for this user' },
         { status: 404 }
@@ -41,13 +49,27 @@ export async function GET(req: NextRequest) {
     }
 
     // Get basic user profile from users collection
-    const userProfile = await db.collection('users').findOne(
-      { email },
-      { projection: { email: 1, name: 1, image: 1 } }
-    );
+    const userDoc = await getDoc(doc(usersCollection, email));
+    
+    if (!userDoc.exists()) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+    
+    const userData = userDoc.data();
+    const userProfile = {
+      email: userData.email,
+      name: userData.name || '',
+      image: userData.image || ''
+    };
 
     return NextResponse.json({
-      surveyData,
+      surveyData: {
+        id: surveyDoc.id,
+        ...surveyDoc.data()
+      },
       userProfile
     });
   } catch (error) {
@@ -70,54 +92,63 @@ export async function DELETE() {
       );
     }
 
-    const client = await clientPromise;
-    const db = client.db('monkeyhouse');
-    
     const userEmail = session.user.email;
     
-    // First, find any user data that needs to be cleaned up
-    const userProfile = await db.collection('users').findOne({ email: userEmail });
+    // First, check if the user exists
+    const userDoc = await getDoc(doc(usersCollection, userEmail));
     
-    // Delete related data in a specific order to prevent null references
-    // 1. Delete the user's survey data
-    const surveyResult = await db.collection('surveys').deleteOne({
-      userEmail: userEmail
-    });
-
-    // 2. Delete any messages or conversations the user is part of
+    // Track deletion statistics
+    let surveyDeleted = false;
+    let userDeleted = false;
     let messagesDeleted = 0;
     let conversationsDeleted = 0;
     
-    if (userProfile && userProfile._id) {
-      const userId = userProfile._id.toString();
-      
-      // Find conversations the user is part of
-      const userConversations = await db.collection('conversations').find({
-        participants: userId
-      }).toArray();
-      
-      // Delete all messages from these conversations
-      if (userConversations.length > 0) {
-        const conversationIds = userConversations.map(c => c._id.toString());
-        const messagesResult = await db.collection('messages').deleteMany({
-          conversationId: { $in: conversationIds }
-        });
-        messagesDeleted = messagesResult.deletedCount;
-        
-        // Delete the conversations
-        const conversationsResult = await db.collection('conversations').deleteMany({
-          participants: userId
-        });
-        conversationsDeleted = conversationsResult.deletedCount;
-      }
+    // 1. Delete the user's survey data
+    const surveyDoc = await getDoc(doc(surveysCollection, userEmail));
+    if (surveyDoc.exists()) {
+      await deleteDoc(doc(surveysCollection, userEmail));
+      surveyDeleted = true;
     }
-    
-    // 3. Finally delete the user from the users collection
-    const userResult = await db.collection('users').deleteOne({
-      email: userEmail
-    });
 
-    if (!surveyResult.deletedCount && !userResult.deletedCount) {
+    // 2. Delete any messages or conversations the user is part of
+    if (userDoc.exists()) {
+      // Find conversations the user is part of
+      const conversationsQuery = query(
+        conversationsCollection,
+        where('participants', 'array-contains', userEmail)
+      );
+      
+      const conversationsSnapshot = await getDocs(conversationsQuery);
+      
+      if (!conversationsSnapshot.empty) {
+        const conversationIds = conversationsSnapshot.docs.map(doc => doc.id);
+        
+        // Delete all messages from these conversations
+        for (const conversationId of conversationIds) {
+          const messagesQuery = query(
+            messagesCollection,
+            where('conversationId', '==', conversationId)
+          );
+          
+          const messagesSnapshot = await getDocs(messagesQuery);
+          
+          for (const messageDoc of messagesSnapshot.docs) {
+            await deleteDoc(doc(messagesCollection, messageDoc.id));
+            messagesDeleted++;
+          }
+          
+          // Delete the conversation
+          await deleteDoc(doc(conversationsCollection, conversationId));
+          conversationsDeleted++;
+        }
+      }
+      
+      // 3. Finally delete the user from the users collection
+      await deleteDoc(doc(usersCollection, userEmail));
+      userDeleted = true;
+    }
+
+    if (!surveyDeleted && !userDeleted) {
       return NextResponse.json(
         { error: 'No user data found to delete' },
         { status: 404 }
@@ -127,8 +158,8 @@ export async function DELETE() {
     return NextResponse.json({
       message: 'User data deleted successfully',
       details: {
-        surveyDeleted: surveyResult.deletedCount > 0,
-        userDeleted: userResult.deletedCount > 0,
+        surveyDeleted,
+        userDeleted,
         messagesDeleted,
         conversationsDeleted
       }

@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import clientPromise from '@/lib/mongodb';
+import { 
+  db, 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  addDoc, 
+  updateDoc, 
+  doc, 
+  Timestamp,
+  getDoc 
+} from '@/lib/firebase';
+
+// Define our Firestore collection reference
+const blocksCollection = collection(db, 'blocks');
 
 // Get blocks for a user
 export async function GET(req: NextRequest) {
@@ -25,16 +39,18 @@ export async function GET(req: NextRequest) {
       );
     }
     
-    const client = await clientPromise;
-    const db = client.db('monkeyhouse');
+    // Query Firestore for blocks
+    const blocksQuery = query(
+      blocksCollection,
+      where('blockedUserEmail', '==', userEmail),
+      where('active', '==', true)
+    );
     
-    // Get active blocks for this user
-    const blocks = await db.collection('blocks')
-      .find({ 
-        blockedUserEmail: userEmail,
-        active: true
-      })
-      .toArray();
+    const blocksSnapshot = await getDocs(blocksQuery);
+    const blocks = blocksSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
     
     return NextResponse.json({ blocks });
   } catch (error) {
@@ -77,21 +93,17 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    const client = await clientPromise;
-    const db = client.db('monkeyhouse');
-    
-    // Create blocks collection if it doesn't exist
-    if (!(await db.listCollections({ name: 'blocks' }).toArray()).length) {
-      await db.createCollection('blocks');
-    }
-    
     // Check if block already exists
-    const existingBlock = await db.collection('blocks').findOne({
-      blockedUserEmail,
-      active: true
-    });
+    const existingBlockQuery = query(
+      blocksCollection,
+      where('blockedUserEmail', '==', blockedUserEmail),
+      where('blockedByEmail', '==', session.user.email),
+      where('active', '==', true)
+    );
     
-    if (existingBlock) {
+    const existingBlockSnapshot = await getDocs(existingBlockQuery);
+    
+    if (!existingBlockSnapshot.empty) {
       return NextResponse.json(
         { error: 'User is already blocked' },
         { status: 400 }
@@ -99,18 +111,19 @@ export async function POST(req: NextRequest) {
     }
     
     // Add the block
+    const now = Timestamp.now();
     const block = {
       blockedUserEmail,
       blockedByEmail: session.user.email,
       reason: reason || 'User reported',
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: now,
+      updatedAt: now,
       active: true
     };
     
-    await db.collection('blocks').insertOne(block);
+    const docRef = await addDoc(blocksCollection, block);
     
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, blockId: docRef.id });
   } catch (error) {
     console.error('Error creating block:', error);
     return NextResponse.json(
@@ -134,28 +147,40 @@ export async function PATCH(req: NextRequest) {
     }
     
     const body = await req.json();
-    const { blockedUserEmail, active } = body;
+    const { blockId, active } = body;
     
-    if (!blockedUserEmail || active === undefined) {
+    if (!blockId || active === undefined) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       );
     }
     
-    const client = await clientPromise;
-    const db = client.db('monkeyhouse');
+    // Get the block document
+    const blockRef = doc(blocksCollection, blockId);
+    const blockDoc = await getDoc(blockRef);
+    
+    if (!blockDoc.exists()) {
+      return NextResponse.json(
+        { error: 'Block not found' },
+        { status: 404 }
+      );
+    }
+    
+    // Check if the user has permission (only the creator can update)
+    const blockData = blockDoc.data();
+    if (blockData.blockedByEmail !== session.user.email) {
+      return NextResponse.json(
+        { error: 'Unauthorized to update this block' },
+        { status: 403 }
+      );
+    }
     
     // Update the block
-    await db.collection('blocks').updateOne(
-      { blockedUserEmail },
-      { 
-        $set: { 
-          active,
-          updatedAt: new Date()
-        } 
-      }
-    );
+    await updateDoc(blockRef, { 
+      active, 
+      updatedAt: Timestamp.now() 
+    });
     
     return NextResponse.json({ success: true });
   } catch (error) {

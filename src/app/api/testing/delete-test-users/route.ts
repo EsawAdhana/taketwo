@@ -1,10 +1,22 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import clientPromise from '@/lib/mongodb';
 import { NextRequest } from 'next/server';
+import { 
+  db, 
+  collection, 
+  getDocs, 
+  query, 
+  where, 
+  deleteDoc, 
+  doc 
+} from '@/lib/firebase';
 
 // Only for development
 const ENABLE_TEST_ENDPOINT = process.env.NODE_ENV !== 'production';
+
+// Define Firestore collection references
+const testSurveysCollection = collection(db, 'test_surveys');
+const usersCollection = collection(db, 'users');
 
 export async function DELETE(req: NextRequest) {
   // Check if test endpoint is enabled
@@ -25,31 +37,38 @@ export async function DELETE(req: NextRequest) {
       );
     }
     
-    const client = await clientPromise;
-    const db = client.db('monkeyhouse');
-    
     // Get all test users before deletion to properly clean up references
-    const testUsers = await db.collection('test_surveys').find({}).toArray();
-    const testUserEmails = testUsers.map(user => user.userEmail);
-    
-    // Delete all test surveys
-    const surveysDeleteResult = await db.collection('test_surveys').deleteMany({});
+    const testUsersSnapshot = await getDocs(testSurveysCollection);
+    const testUserEmails = testUsersSnapshot.docs.map(doc => doc.data().userEmail).filter(Boolean);
     
     // Track deletion counts for each collection
     const deletionCounts = {
-      surveys: surveysDeleteResult.deletedCount,
+      surveys: 0,
       users: 0,
       conversations: 0,
       messages: 0
     };
     
+    // Delete all test surveys
+    for (const testUserDoc of testUsersSnapshot.docs) {
+      await deleteDoc(doc(testSurveysCollection, testUserDoc.id));
+      deletionCounts.surveys++;
+    }
+    
     // If there were test users, clean up related collections
     if (testUserEmails.length > 0) {
-      // Clean up any test users from the main users collection if they exist
-      const usersDeleteResult = await db.collection('users').deleteMany({
-        email: { $in: testUserEmails }
-      });
-      deletionCounts.users = usersDeleteResult.deletedCount;
+      // For each test user email, check if they exist in the main users collection
+      for (const email of testUserEmails) {
+        try {
+          // In Firestore, we'll assume the document ID in users collection is the email
+          const userDocRef = doc(usersCollection, email);
+          await deleteDoc(userDocRef);
+          deletionCounts.users++;
+        } catch (error) {
+          console.error(`Error deleting user with email ${email}:`, error);
+          // Continue with other users even if one fails
+        }
+      }
     }
     
     return NextResponse.json({

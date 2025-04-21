@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import clientPromise from '@/lib/mongodb';
+import { 
+  db, 
+  collection, 
+  query, 
+  where, 
+  getDocs 
+} from '@/lib/firebase';
+
+// Define our Firestore collection reference
+const bannedUsersCollection = collection(db, 'banned_users');
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,14 +22,15 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const client = await clientPromise;
-    const db = client.db('monkeyhouse');
-
-    // Check if user is in banned_users collection
-    const bannedUser = await db.collection('banned_users').findOne({
-      userEmail: email,
-      permanent: true
-    });
+    // Query Firestore for banned users
+    const bannedQuery = query(
+      bannedUsersCollection,
+      where('userEmail', '==', email),
+      where('permanent', '==', true)
+    );
+    
+    const bannedSnapshot = await getDocs(bannedQuery);
+    const bannedUser = !bannedSnapshot.empty ? bannedSnapshot.docs[0].data() : null;
 
     return NextResponse.json({
       isBanned: !!bannedUser,

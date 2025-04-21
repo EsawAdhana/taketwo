@@ -5,9 +5,16 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { SurveyFormData } from '@/constants/survey-constants';
 import Image from 'next/image';
-import { FiUsers, FiHome, FiDollarSign, FiCalendar, FiList, FiStar, FiFlag, FiX, FiMapPin } from 'react-icons/fi';
+import { FiUsers, FiHome, FiDollarSign, FiCalendar, FiList, FiStar, FiFlag, FiX, FiMapPin, FiMessageCircle, FiInfo } from 'react-icons/fi';
 import ReportUserModal from '@/components/ReportUserModal';
 import UserProfileModal from '@/components/UserProfileModal';
+import Modal from '@/components/Modal';
+import { 
+  createConversation, 
+  getSurveyByUser, 
+  getRecommendationsByUser,
+  getUser 
+} from '@/lib/firebaseService';
 
 interface CompatibilityMatch {
   userEmail: string;
@@ -61,14 +68,14 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchSurveyData = async () => {
       try {
-        const response = await fetch('/api/survey');
-        const result = await response.json();
+        // Replace fetch API call with direct Firebase function
+        const result = await getSurveyByUser(session?.user?.email as string);
         
-        if (result.data) {
-          setSurveyData(result.data);
+        if (result) {
+          setSurveyData(result as unknown as SurveyFormData);
           
           // If the survey is submitted, fetch recommendations
-          if (result.data.isSubmitted) {
+          if (result.isSubmitted) {
             fetchRecommendations();
           }
         }
@@ -82,10 +89,13 @@ export default function DashboardPage() {
     const fetchRecommendations = async () => {
       setRecommendationsLoading(true);
       try {
-        const response = await fetch(`/api/recommendations?showTestUsers=${showTestUsers}`);
-        const result = await response.json();
+        // Replace fetch API call with direct Firebase function
+        const result = await getRecommendationsByUser(
+          session?.user?.email as string, 
+          showTestUsers
+        );
         
-        if (response.ok && result.matches) {
+        if (result && result.matches) {
           setRecommendations(result.matches);
         }
       } catch (error) {
@@ -104,21 +114,20 @@ export default function DashboardPage() {
     try {
       setLoadingUserDetails(true);
       
-      // Call API to get detailed user profile
-      const response = await fetch(`/api/user?email=${encodeURIComponent(match.userEmail)}`);
+      // Replace fetch API call with direct Firebase function
+      const userData = await getUser(match.userEmail);
+      const surveyData = await getSurveyByUser(match.userEmail);
       
-      if (!response.ok) {
+      if (!userData) {
         console.error('Failed to fetch user details');
         // Still show the modal with limited information
         setSelectedUserDetails(match);
         return;
       }
       
-      const userData = await response.json();
-      
       setSelectedUserDetails({
         ...match,
-        fullProfile: userData.surveyData
+        fullProfile: surveyData
       });
     } catch (error) {
       console.error('Error fetching user details:', error);
@@ -140,16 +149,25 @@ export default function DashboardPage() {
   };
   
   // Helper function to get user display name
-  const getName = (userProfile?: {name?: string}, fullProfile?: any): string => {
-    // Use firstName from the fullProfile (survey data) if available
-    if (fullProfile?.firstName) {
+  const getName = (userProfile?: {name?: string, email?: string}, fullProfile?: any): string => {
+    // Use firstName from the survey data if available (highest priority)
+    if (fullProfile?.firstName && typeof fullProfile.firstName === 'string' && fullProfile.firstName.trim() !== '') {
       return fullProfile.firstName;
     }
-    // Use name from basic user profile if available (might still be 'User')
-    if (userProfile?.name) {
+    
+    // Use name from basic user profile if available and not default/empty
+    if (userProfile?.name && userProfile.name !== 'User' && userProfile.name.trim() !== '') {
       return userProfile.name;
     }
-    // Fallback to 'User'
+    
+    // Use email as fallback instead of just 'User'
+    if (userProfile?.email) {
+      // Extract username part from email (before @)
+      const username = userProfile.email.split('@')[0];
+      return username.charAt(0).toUpperCase() + username.slice(1); // Capitalize first letter
+    }
+    
+    // Fallback to 'User' only as last resort
     return 'User';
   };
   
@@ -174,30 +192,17 @@ export default function DashboardPage() {
 
     setIsCreatingGroup(true);
     try {
-      const response = await fetch('/api/conversations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          participants: [session?.user?.email, ...selectedUsers.map(u => u.userEmail)],
-          isGroup: true,
-          name: groupName.trim(),
-          participantNames: {
-            [session?.user?.email || '']: session?.user?.email || '',
-            ...selectedUsers.reduce((acc, user) => ({
-              ...acc,
-              [user.userEmail]: getName(user.userProfile, user.fullProfile)
-            }), {})
-          }
-        }),
+      // Replace fetch API call with direct Firebase function
+      const result = await createConversation({
+        participants: [session?.user?.email, ...selectedUsers.map(u => u.userEmail)],
+        isGroup: true,
+        name: groupName.trim(),
       });
 
-      const result = await response.json();
-      if (result.success && result.data) {
-        router.push(`/messages/${result.data._id}`);
+      if (result && result._id) {
+        router.push(`/messages/${result._id}`);
       } else {
-        throw new Error(result.error || 'Failed to create group chat');
+        throw new Error('Failed to create group chat');
       }
     } catch (error) {
       console.error('Error creating group chat:', error);

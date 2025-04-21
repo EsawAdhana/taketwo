@@ -1,6 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import clientPromise from '@/lib/mongodb';
+import { 
+  db, 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  addDoc, 
+  Timestamp,
+  updateDoc,
+  doc
+} from '@/lib/firebase';
+
+// Define Firestore collection references
+const reportsCollection = collection(db, 'reports');
+const blocksCollection = collection(db, 'blocks');
+const bannedUsersCollection = collection(db, 'banned_users');
 
 export async function POST(req: NextRequest) {
   try {
@@ -32,22 +47,7 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    const client = await clientPromise;
-    const db = client.db('monkeyhouse');
-    
-    // Create collections if they don't exist
-    const collections = await db.listCollections().toArray();
-    const collectionNames = collections.map(c => c.name);
-    
-    if (!collectionNames.includes('reports')) {
-      await db.createCollection('reports');
-    }
-    if (!collectionNames.includes('blocks')) {
-      await db.createCollection('blocks');
-    }
-    if (!collectionNames.includes('banned_users')) {
-      await db.createCollection('banned_users');
-    }
+    const now = Timestamp.now();
     
     // Add the report
     const report = {
@@ -56,51 +56,68 @@ export async function POST(req: NextRequest) {
       reason,
       details: details || '',
       status: 'pending',
-      createdAt: new Date(),
-      updatedAt: new Date()
+      createdAt: now,
+      updatedAt: now
     };
     
-    await db.collection('reports').insertOne(report);
+    await addDoc(reportsCollection, report);
     
     // Create a block for the reporter
-    await db.collection('blocks').insertOne({
+    await addDoc(blocksCollection, {
       blockedUserEmail: reportedUserEmail,
       blockedByEmail: session.user.email,
       reason: 'User reported',
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: now,
+      updatedAt: now,
       active: true,
       fromReport: true
     });
     
-    // Count total reports instead of unique reporters for testing
-    const totalReports = await db.collection('reports')
-      .countDocuments({ reportedUserEmail });
+    // Count total reports
+    const totalReportsQuery = query(
+      reportsCollection,
+      where('reportedUserEmail', '==', reportedUserEmail)
+    );
+    
+    const totalReportsSnapshot = await getDocs(totalReportsQuery);
+    const totalReports = totalReportsSnapshot.size;
     
     // If user has 3 or more reports (from anyone), permanently ban them
     if (totalReports >= 3) {
       // Add to banned users collection
-      await db.collection('banned_users').insertOne({
+      await addDoc(bannedUsersCollection, {
         userEmail: reportedUserEmail,
         reason: 'Received 3 or more reports',
         reportCount: totalReports,
-        bannedAt: new Date(),
+        bannedAt: now,
         permanent: true
       });
       
       // Mark all pending reports as resolved
-      await db.collection('reports').updateMany(
-        { reportedUserEmail, status: 'pending' },
-        { $set: { status: 'resolved', updatedAt: new Date() } }
+      const pendingReportsQuery = query(
+        reportsCollection,
+        where('reportedUserEmail', '==', reportedUserEmail),
+        where('status', '==', 'pending')
       );
       
+      const pendingReportsSnapshot = await getDocs(pendingReportsQuery);
+      
+      const updatePromises = pendingReportsSnapshot.docs.map(reportDoc => 
+        updateDoc(doc(reportsCollection, reportDoc.id), { 
+          status: 'resolved', 
+          updatedAt: now 
+        })
+      );
+      
+      await Promise.all(updatePromises);
+      
       // Create system-wide block
-      await db.collection('blocks').insertOne({
+      await addDoc(blocksCollection, {
         blockedUserEmail: reportedUserEmail,
         blockedByEmail: 'system',
         reason: 'Account banned due to multiple reports',
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: now,
+        updatedAt: now,
         active: true,
         isSystemBlock: true
       });
@@ -121,12 +138,8 @@ export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession();
     
-    // Only allow authenticated users to view reports
     if (!session?.user?.email) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
     const { searchParams } = new URL(req.url);
@@ -134,25 +147,29 @@ export async function GET(req: NextRequest) {
     
     if (!userEmail) {
       return NextResponse.json(
-        { error: 'Missing user email parameter' },
+        { error: 'Missing userEmail parameter' },
         { status: 400 }
       );
     }
     
-    const client = await clientPromise;
-    const db = client.db('monkeyhouse');
-    
-    // Get reports for this user
-    const reports = await db.collection('reports')
-      .find({ reportedUserEmail: userEmail })
-      .toArray();
-    
-    return NextResponse.json({ reports });
-  } catch (error) {
-    console.error('Error fetching reports:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch reports' },
-      { status: 500 }
+    // Query Firestore for reports
+    const reportsQuery = query(
+      reportsCollection,
+      where('reportedUserEmail', '==', userEmail)
     );
+    
+    const reportsSnapshot = await getDocs(reportsQuery);
+    const reports = reportsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    return NextResponse.json({ 
+      success: true, 
+      reports 
+    });
+  } catch (error) {
+    console.error('Error getting reports:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 } 

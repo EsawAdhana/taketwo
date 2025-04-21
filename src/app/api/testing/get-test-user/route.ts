@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import clientPromise from '@/lib/mongodb';
-import { WithId, Document } from 'mongodb';
+import { 
+  db, 
+  collection, 
+  doc, 
+  getDoc 
+} from '@/lib/firebase';
 import { SurveyFormData } from '@/constants/survey-constants';
 import { ExtendedSurveyData } from '@/types/survey';
 
@@ -9,28 +13,31 @@ import { ExtendedSurveyData } from '@/types/survey';
 // Should be disabled in production
 const ENABLE_TEST_ENDPOINT = process.env.NODE_ENV !== 'production';
 
-// Convert MongoDB document to SurveyFormData
-function documentToSurveyData(doc: WithId<Document>): ExtendedSurveyData {
+// Define Firestore collection reference
+const testSurveysCollection = collection(db, 'test_surveys');
+
+// Convert Firestore document to SurveyFormData
+function documentToSurveyData(docData: any): ExtendedSurveyData {
   return {
-    firstName: doc.firstName || '',
-    gender: doc.gender || '',
-    roomWithDifferentGender: !!doc.roomWithDifferentGender,
-    housingRegion: doc.housingRegion || '',
-    housingCities: Array.isArray(doc.housingCities) ? doc.housingCities : [],
-    internshipCompany: doc.internshipCompany || '',
-    internshipStartDate: doc.internshipStartDate || '',
-    internshipEndDate: doc.internshipEndDate || '',
-    desiredRoommates: doc.desiredRoommates || '1',
-    minBudget: typeof doc.minBudget === 'number' ? doc.minBudget : 1000,
-    maxBudget: typeof doc.maxBudget === 'number' ? doc.maxBudget : 1500,
-    preferences: Array.isArray(doc.preferences) ? doc.preferences : [],
-    additionalNotes: doc.additionalNotes || '',
-    currentPage: typeof doc.currentPage === 'number' ? doc.currentPage : 1,
-    isDraft: !!doc.isDraft,
-    isSubmitted: !!doc.isSubmitted,
-    userEmail: doc.userEmail || '',
-    name: doc.name || '',
-    email: doc.email || '',
+    firstName: docData.firstName || '',
+    gender: docData.gender || '',
+    roomWithDifferentGender: !!docData.roomWithDifferentGender,
+    housingRegion: docData.housingRegion || '',
+    housingCities: Array.isArray(docData.housingCities) ? docData.housingCities : [],
+    internshipCompany: docData.internshipCompany || '',
+    internshipStartDate: docData.internshipStartDate || '',
+    internshipEndDate: docData.internshipEndDate || '',
+    desiredRoommates: docData.desiredRoommates || '1',
+    minBudget: typeof docData.minBudget === 'number' ? docData.minBudget : 1000,
+    maxBudget: typeof docData.maxBudget === 'number' ? docData.maxBudget : 1500,
+    preferences: Array.isArray(docData.preferences) ? docData.preferences : [],
+    additionalNotes: docData.additionalNotes || '',
+    currentPage: typeof docData.currentPage === 'number' ? docData.currentPage : 1,
+    isDraft: !!docData.isDraft,
+    isSubmitted: !!docData.isSubmitted,
+    userEmail: docData.userEmail || '',
+    name: docData.name || '',
+    email: docData.email || '',
   };
 }
 
@@ -65,22 +72,10 @@ export async function GET(req: NextRequest) {
       );
     }
     
-    const client = await clientPromise;
-    const db = client.db('monkeyhouse');
+    // Get user survey data from Firestore
+    const userDoc = await getDoc(doc(testSurveysCollection, userEmail));
     
-    // Check if test_surveys collection exists
-    const collections = await db.listCollections({ name: 'test_surveys' }).toArray();
-    if (collections.length === 0) {
-      return NextResponse.json(
-        { error: 'The test_surveys collection does not exist yet. Please add test users first.' },
-        { status: 404 }
-      );
-    }
-    
-    // Get user survey data
-    const userDoc = await db.collection('test_surveys').findOne({ userEmail });
-    
-    if (!userDoc) {
+    if (!userDoc.exists()) {
       return NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
@@ -88,7 +83,7 @@ export async function GET(req: NextRequest) {
     }
     
     // Convert to SurveyFormData
-    const userData = documentToSurveyData(userDoc);
+    const userData = documentToSurveyData(userDoc.data());
     
     return NextResponse.json({
       user: {

@@ -1,82 +1,53 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import clientPromise from '@/lib/mongodb';
+import { createOrUpdateSurvey, getSurveyByUser } from '@/lib/firebaseService';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const session = await getServerSession();
     
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const userEmail = session.user.email;
     
-    const client = await clientPromise;
-    const db = client.db('monkeyhouse');
+    // Get survey data
+    const survey = await getSurveyByUser(userEmail);
     
-    // Check regular surveys collection first
-    let survey = await db.collection('surveys').findOne({
-      userEmail: session.user.email
-    });
-    
-    // If not found, check test surveys
     if (!survey) {
-      survey = await db.collection('test_surveys').findOne({
-        userEmail: session.user.email
+      return NextResponse.json({ 
+        success: true, 
+        data: null,
+        message: 'Survey not found' 
       });
     }
     
-    return NextResponse.json({ data: survey });
+    return NextResponse.json({ success: true, data: survey });
   } catch (error) {
     console.error('Error fetching survey:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
     const session = await getServerSession();
     
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const userEmail = session.user.email;
+    const surveyData = await req.json();
     
-    const data = await req.json();
-    const client = await clientPromise;
-    const db = client.db('monkeyhouse');
+    // Create or update survey
+    await createOrUpdateSurvey(userEmail, surveyData);
     
-    // Remove _id from data if it exists
-    const { _id, ...surveyData } = data;
-    
-    // Extract name for user update (assuming it comes as 'firstName' from survey)
-    const nameFromSurvey = surveyData.firstName; 
-    
-    // Update or insert survey data
-    await db.collection('surveys').updateOne(
-      { userEmail: session.user.email },
-      {
-        $set: {
-          ...surveyData,
-          userEmail: session.user.email,
-          updatedAt: new Date()
-        }
-      },
-      { upsert: true }
-    );
-    
-    // Also update the user's name in the users collection
-    if (nameFromSurvey) { // Only update if name is provided
-      await db.collection('users').updateOne(
-        { email: session.user.email }, // Find user by email
-        {
-          $set: {
-            name: nameFromSurvey, // Update the main name field
-            updatedAt: new Date() // Optionally update a timestamp here too
-          }
-        }
-      );
-    }
-    
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Survey saved successfully' 
+    });
   } catch (error) {
     console.error('Error saving survey:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

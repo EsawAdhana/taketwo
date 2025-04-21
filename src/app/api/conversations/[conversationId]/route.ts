@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { connectDB } from '@/lib/mongodb';
-import Conversation from '@/models/Conversation';
-import User from '@/models/User';
-import Message from '@/models/Message';
+import { 
+  getConversation, 
+  updateConversation,
+  deleteConversation 
+} from '@/lib/firebaseService';
 
 export async function GET(
   req: Request,
@@ -16,55 +17,85 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectDB();
-
-    const conversationId = params.conversationId;
-
-    // Get current user by email since session.user.id might be undefined
-    const currentUser = await User.findOne({ email: session.user.email });
-    
-    if (!currentUser) {
-      return NextResponse.json({ error: 'Current user not found' }, { status: 404 });
+    if (!params.conversationId) {
+      return NextResponse.json({ error: 'Conversation ID is required' }, { status: 400 });
     }
+
+    const userEmail = session.user.email;
     
-    const userId = currentUser._id.toString();
-
-    // Find the conversation and verify the user is a participant
-    const conversation = await Conversation.findById(conversationId)
-      .populate('participants', 'name image')
-      .populate('lastMessage');
-
+    // Get conversation by ID
+    const conversation = await getConversation(params.conversationId);
+    
     if (!conversation) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
     }
-
-    // Verify user is part of the conversation
-    const isParticipant = conversation.participants.some(
-      (p: any) => p._id.toString() === userId
-    );
     
-    if (!isParticipant) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Check if user is a participant
+    const participants = Array.isArray(conversation.participants) 
+      ? conversation.participants.map((p: any) => typeof p === 'string' ? p : p._id || p.email)
+      : [];
+    
+    if (!userEmail || !participants.includes(userEmail)) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
-
+    
     // Transform the conversation to include other participants' info
-    const otherParticipants = conversation.participants.filter(
-      (p: any) => p._id.toString() !== userId
-    );
+    const otherParticipants = participants.filter(p => p !== userEmail);
     
     const transformedConversation = {
-      _id: conversation._id,
-      participants: conversation.participants,
-      otherParticipants,
-      lastMessage: conversation.lastMessage,
-      isGroup: conversation.isGroup,
-      name: conversation.name || (otherParticipants[0]?.name || 'Unknown User'),
-      updatedAt: conversation.updatedAt
+      ...conversation,
+      otherParticipants
     };
 
     return NextResponse.json({ success: true, data: transformedConversation });
   } catch (error) {
     console.error('Error fetching conversation:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: { conversationId: string } }
+) {
+  try {
+    const session = await getServerSession();
+    
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!params.conversationId) {
+      return NextResponse.json({ error: 'Conversation ID is required' }, { status: 400 });
+    }
+
+    const userEmail = session.user.email;
+    
+    // Get conversation to check permissions
+    const conversation = await getConversation(params.conversationId);
+    
+    if (!conversation) {
+      return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+    }
+    
+    // Check if user is a participant
+    const participants = Array.isArray(conversation.participants) 
+      ? conversation.participants.map((p: any) => typeof p === 'string' ? p : p._id || p.email)
+      : [];
+    
+    if (!userEmail || !participants.includes(userEmail)) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+    
+    // Get update data
+    const updateData = await req.json();
+    
+    // Update conversation
+    const updatedConversation = await updateConversation(params.conversationId, updateData);
+
+    return NextResponse.json({ success: true, data: updatedConversation });
+  } catch (error) {
+    console.error('Error updating conversation:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
@@ -80,42 +111,32 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectDB();
-
-    const conversationId = params.conversationId;
-
-    // Get current user by email since session.user.id might be undefined
-    const currentUser = await User.findOne({ email: session.user.email });
-    
-    if (!currentUser) {
-      return NextResponse.json({ error: 'Current user not found' }, { status: 404 });
+    if (!params.conversationId) {
+      return NextResponse.json({ error: 'Conversation ID is required' }, { status: 400 });
     }
+
+    const userEmail = session.user.email;
     
-    const userId = currentUser._id.toString();
-
-    // Find the conversation and verify the user is a participant
-    const conversation = await Conversation.findById(conversationId);
-
+    // Get conversation to check permissions
+    const conversation = await getConversation(params.conversationId);
+    
     if (!conversation) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
     }
-
-    // Verify user is part of the conversation
-    const isParticipant = conversation.participants.some(
-      (p: any) => p.toString() === userId
-    );
     
-    if (!isParticipant) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Check if user is a participant
+    const participants = Array.isArray(conversation.participants) 
+      ? conversation.participants.map((p: any) => typeof p === 'string' ? p : p._id || p.email)
+      : [];
+    
+    if (!userEmail || !participants.includes(userEmail)) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
-
-    // Delete all associated messages
-    await Message.deleteMany({ conversationId });
     
-    // Delete the conversation
-    await Conversation.findByIdAndDelete(conversationId);
+    // Delete conversation
+    await deleteConversation(params.conversationId);
 
-    return NextResponse.json({ success: true, message: 'Conversation deleted successfully' });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting conversation:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

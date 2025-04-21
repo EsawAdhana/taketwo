@@ -1,37 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import clientPromise from '@/lib/mongodb';
 import { calculateCompatibilityScore, calculateEnhancedCompatibilityScore } from '@/utils/recommendationEngine';
-import { WithId, Document } from 'mongodb';
 import { SurveyFormData } from '@/constants/survey-constants';
 import { ExtendedSurveyData } from '@/types/survey';
+import { 
+  db, 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  doc, 
+  getDoc 
+} from '@/lib/firebase';
 
 // This endpoint is for testing purposes only
 // Should be disabled in production
 const ENABLE_TEST_ENDPOINT = process.env.NODE_ENV !== 'production';
 
-// Convert MongoDB document to SurveyFormData
-function documentToSurveyData(doc: any): ExtendedSurveyData {
+// Define Firestore collection references
+const testSurveysCollection = collection(db, 'test_surveys');
+
+// Convert Firestore document to SurveyFormData
+function documentToSurveyData(docData: any): ExtendedSurveyData {
   return {
-    firstName: doc.firstName || '',
-    gender: doc.gender || '',
-    roomWithDifferentGender: !!doc.roomWithDifferentGender,
-    housingRegion: doc.housingRegion || '',
-    housingCities: Array.isArray(doc.housingCities) ? doc.housingCities : [],
-    internshipCompany: doc.internshipCompany || '',
-    internshipStartDate: doc.internshipStartDate || '',
-    internshipEndDate: doc.internshipEndDate || '',
-    desiredRoommates: doc.desiredRoommates || '1',
-    minBudget: typeof doc.minBudget === 'number' ? doc.minBudget : 1000,
-    maxBudget: typeof doc.maxBudget === 'number' ? doc.maxBudget : 1500,
-    preferences: Array.isArray(doc.preferences) ? doc.preferences : [],
-    additionalNotes: doc.additionalNotes || '',
-    currentPage: typeof doc.currentPage === 'number' ? doc.currentPage : 1,
-    isDraft: !!doc.isDraft,
-    isSubmitted: !!doc.isSubmitted,
-    userEmail: doc.userEmail || doc.email || '',
-    name: doc.name || '',
-    email: doc.email || doc.userEmail || '',
+    firstName: docData.firstName || '',
+    gender: docData.gender || '',
+    roomWithDifferentGender: !!docData.roomWithDifferentGender,
+    housingRegion: docData.housingRegion || '',
+    housingCities: Array.isArray(docData.housingCities) ? docData.housingCities : [],
+    internshipCompany: docData.internshipCompany || '',
+    internshipStartDate: docData.internshipStartDate || '',
+    internshipEndDate: docData.internshipEndDate || '',
+    desiredRoommates: docData.desiredRoommates || '1',
+    minBudget: typeof docData.minBudget === 'number' ? docData.minBudget : 1000,
+    maxBudget: typeof docData.maxBudget === 'number' ? docData.maxBudget : 1500,
+    preferences: Array.isArray(docData.preferences) ? docData.preferences : [],
+    additionalNotes: docData.additionalNotes || '',
+    currentPage: typeof docData.currentPage === 'number' ? docData.currentPage : 1,
+    isDraft: !!docData.isDraft,
+    isSubmitted: !!docData.isSubmitted,
+    userEmail: docData.userEmail || docData.email || '',
+    name: docData.name || '',
+    email: docData.email || docData.userEmail || '',
   };
 }
 
@@ -68,30 +78,34 @@ export async function GET(req: NextRequest) {
       );
     }
     
-    const client = await clientPromise;
-    const db = client.db('monkeyhouse');
+    // First try direct document lookup by email
+    let user1Doc = await getDoc(doc(testSurveysCollection, email1));
+    let user2Doc = await getDoc(doc(testSurveysCollection, email2));
     
-    // Check if test_surveys collection exists
-    const collections = await db.listCollections({ name: 'test_surveys' }).toArray();
-    if (collections.length === 0) {
-      return NextResponse.json(
-        { error: 'The test_surveys collection does not exist yet. Please add test users first.' },
-        { status: 404 }
+    // If not found, try query by userEmail or email field
+    if (!user1Doc.exists()) {
+      const user1Query = query(
+        testSurveysCollection,
+        where('userEmail', '==', email1)
       );
+      const user1Snapshot = await getDocs(user1Query);
+      if (!user1Snapshot.empty) {
+        user1Doc = user1Snapshot.docs[0];
+      }
     }
     
-    // Find both users in test_surveys collection
-    const user1Doc = await db.collection('test_surveys').findOne({ $or: [
-      { userEmail: email1 },
-      { email: email1 }
-    ]});
+    if (!user2Doc.exists()) {
+      const user2Query = query(
+        testSurveysCollection,
+        where('userEmail', '==', email2)
+      );
+      const user2Snapshot = await getDocs(user2Query);
+      if (!user2Snapshot.empty) {
+        user2Doc = user2Snapshot.docs[0];
+      }
+    }
     
-    const user2Doc = await db.collection('test_surveys').findOne({ $or: [
-      { userEmail: email2 },
-      { email: email2 }
-    ]});
-    
-    if (!user1Doc || !user2Doc) {
+    if (!user1Doc.exists() || !user2Doc.exists()) {
       return NextResponse.json(
         { error: 'One or both users not found' },
         { status: 404 }
@@ -99,8 +113,8 @@ export async function GET(req: NextRequest) {
     }
     
     // Convert to SurveyFormData
-    const user1 = documentToSurveyData(user1Doc);
-    const user2 = documentToSurveyData(user2Doc);
+    const user1 = documentToSurveyData(user1Doc.data());
+    const user2 = documentToSurveyData(user2Doc.data());
     
     // Calculate compatibility scores in both directions
     let score1to2, score2to1;

@@ -1,11 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import clientPromise from '@/lib/mongodb';
 import { HOUSING_REGIONS, NON_NEGOTIABLES, Preference, PreferenceStrength } from '@/constants/survey-constants';
+import { 
+  db, 
+  collection, 
+  getDocs, 
+  addDoc, 
+  doc, 
+  setDoc, 
+  Timestamp 
+} from '@/lib/firebase';
 
 // This endpoint is for testing purposes only
 // Should be disabled in production
 const ENABLE_TEST_ENDPOINT = process.env.NODE_ENV !== 'production';
+
+// Define Firestore collection reference
+const testSurveysCollection = collection(db, 'test_surveys');
 
 // Names for generating test users
 const FIRST_NAMES = [
@@ -256,18 +267,22 @@ function generateTestUser(index: number, existingCount: number = 0): any {
     maxBudget,
     preferences,
     additionalNotes,
-    isSubmitted: true,
+    currentPage: 5,
     isDraft: false,
+    isSubmitted: true,
+    userEmail: email,  // Store email in both fields for compatibility
+    firstName,  // Store first name separately for search
+    lastName,  // Store last name separately for search
+    createdAt: Timestamp.now(),
+    updatedAt: Timestamp.now()
   };
 }
 
-// Get a random preference strength
 function getRandomPreferenceStrength(): PreferenceStrength {
   const strengths: PreferenceStrength[] = ["deal breaker", "prefer not", "neutral", "prefer", "must have"];
   return strengths[Math.floor(Math.random() * strengths.length)];
 }
 
-// Helper function to generate neutral preferences
 function generateNeutralPreferences(): Preference[] {
   return NON_NEGOTIABLES.map(item => ({
     item,
@@ -275,7 +290,6 @@ function generateNeutralPreferences(): Preference[] {
   }));
 }
 
-// Helper function to generate preferences with specific strengths for certain items
 function generatePreferences(
   defaultStrength: PreferenceStrength, 
   specificItems: string[] = [], 
@@ -299,7 +313,7 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession();
     
-    // Only allow authenticated users to access this endpoint
+    // Only allow authenticated users to create test users
     if (!session?.user?.email) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -307,65 +321,52 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    // Parse request body for numUsers parameter
-    let numUsers = 10; // Default
-    try {
-      const body = await req.json();
-      if (body.numUsers && typeof body.numUsers === 'number') {
-        numUsers = Math.min(Math.max(1, body.numUsers), 100); // Limit between 1 and 100
+    // Parse request body
+    const body = await req.json();
+    const { count = 10 } = body;
+    
+    // Limit count to a reasonable number
+    const userCount = Math.min(Math.max(1, count), 50);
+    
+    // Count existing test users in Firestore
+    const existingSnapshot = await getDocs(testSurveysCollection);
+    const existingCount = existingSnapshot.size;
+    
+    // Generate and save test users
+    const newUsers = [];
+    const addedUsers = [];
+    
+    for (let i = 0; i < userCount; i++) {
+      const testUser = generateTestUser(i, existingCount);
+      newUsers.push(testUser);
+      
+      // In Firestore, we'll use the email as the document ID
+      const email = testUser.email;
+      
+      try {
+        // Add to test_surveys collection
+        await setDoc(doc(testSurveysCollection, email), testUser);
+        addedUsers.push(testUser);
+      } catch (error) {
+        console.error(`Error adding test user ${email}:`, error);
       }
-    } catch (e) {
-      // If request body parsing fails, use default
     }
-    
-    const client = await clientPromise;
-    const db = client.db('monkeyhouse');
-    
-    // Check if test_surveys collection exists, create it if not
-    const collections = await db.listCollections({ name: 'test_surveys' }).toArray();
-    if (collections.length === 0) {
-      await db.createCollection('test_surveys');
-    }
-    
-    // Get the count of existing test users to generate unique identifiers
-    const existingCount = await db.collection('test_surveys').countDocuments();
-    
-    // Generate test users with indices that continue from existing users
-    const TEST_USERS = [];
-    
-    for (let i = 1; i <= numUsers; i++) {
-      TEST_USERS.push(generateTestUser(i, existingCount));
-    }
-    
-    // Get new test user emails for reference
-    const testEmails = TEST_USERS.map(user => user.email);
-    
-    // No longer delete existing test users - we'll append instead
-    
-    // Add test users to the test_surveys collection
-    const testUserData = TEST_USERS.map(user => ({
-      ...user,
-      userEmail: user.email,
-      updatedAt: new Date()
-    }));
-    
-    const insertResult = await db.collection('test_surveys').insertMany(testUserData);
-    
-    // Verify data was inserted
-    const totalSurveys = await db.collection('test_surveys').countDocuments();
     
     return NextResponse.json({
       success: true,
-      message: `Added ${TEST_USERS.length} test users to the database`,
-      verificationCounts: {
-        surveys: totalSurveys,
-        newSurveys: insertResult.insertedCount
-      }
+      message: `Added ${addedUsers.length} test users (${userCount} requested)`,
+      count: addedUsers.length,
+      users: addedUsers.map(user => ({
+        name: user.name,
+        email: user.email,
+        gender: user.gender,
+        region: user.housingRegion
+      }))
     });
   } catch (error) {
     return NextResponse.json(
       { 
-        error: 'Failed to add test users',
+        error: 'Failed to create test users',
         message: error instanceof Error ? error.message : String(error)
       },
       { status: 500 }

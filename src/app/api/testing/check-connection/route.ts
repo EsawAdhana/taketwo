@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '@/lib/mongodb';
+import { 
+  db, 
+  collection, 
+  getDocs,
+  query, 
+  limit 
+} from '@/lib/firebase';
 
 // Only for development
 const ENABLE_TEST_ENDPOINT = process.env.NODE_ENV !== 'production';
@@ -10,43 +16,57 @@ export async function GET() {
   }
   
   try {
-    // Simple connection test - avoid complex queries
-    const client = await clientPromise;
-    // MongoDB client topology property is internal and may not be typed correctly
-    // Use type assertion and optional chaining to safely access it
-    const isConnected = !!client && !!(client as any).topology?.isConnected?.();
-    const dbName = client.db().databaseName;
+    // Define collection references
+    const surveysCollection = collection(db, 'surveys');
+    const testSurveysCollection = collection(db, 'test_surveys');
+    const usersCollection = collection(db, 'users');
+    const conversationsCollection = collection(db, 'conversations');
+    const messagesCollection = collection(db, 'messages');
+    const reportsCollection = collection(db, 'reports');
+    const blocksCollection = collection(db, 'blocks');
+    const bannedUsersCollection = collection(db, 'banned_users');
     
-    // Get basic stats - just the list of collections
-    const collections = await client.db().listCollections().toArray();
-    const collectionNames = collections.map(col => col.name);
+    // Check if collections exist by trying to get one document from each
+    const collectionsStatus = {};
+    const collectionCounts = {};
     
-    // Get count of documents in each collection, but check if collections exist first
-    let surveysCount = 0;
-    let testSurveysCount = 0;
+    const collections = [
+      { name: 'surveys', ref: surveysCollection },
+      { name: 'test_surveys', ref: testSurveysCollection },
+      { name: 'users', ref: usersCollection },
+      { name: 'conversations', ref: conversationsCollection },
+      { name: 'messages', ref: messagesCollection },
+      { name: 'reports', ref: reportsCollection },
+      { name: 'blocks', ref: blocksCollection },
+      { name: 'banned_users', ref: bannedUsersCollection }
+    ];
     
-    if (collectionNames.includes('surveys')) {
-      surveysCount = await client.db().collection('surveys').countDocuments();
-    }
-    
-    if (collectionNames.includes('test_surveys')) {
-      testSurveysCount = await client.db().collection('test_surveys').countDocuments();
+    // Check each collection
+    for (const col of collections) {
+      try {
+        const querySnapshot = await getDocs(query(col.ref, limit(1)));
+        collectionsStatus[col.name] = true;
+        
+        // Count documents in each collection
+        const countSnapshot = await getDocs(col.ref);
+        collectionCounts[col.name] = countSnapshot.size;
+      } catch (error) {
+        console.error(`Error checking collection ${col.name}:`, error);
+        collectionsStatus[col.name] = false;
+        collectionCounts[col.name] = 0;
+      }
     }
     
     return NextResponse.json({
       success: true,
       connection: {
-        connected: isConnected,
-        dbName,
-        // serverInfo is also an internal property, use type assertion
-        serverInfo: (client as any).serverInfo || { version: 'unknown' },
-        collectionCount: collectionNames.length
+        connected: true,
+        dbName: 'firestore',
+        serverInfo: { version: 'Firebase Firestore' },
+        collectionCount: Object.keys(collectionsStatus).length
       },
-      collectionNames,
-      counts: {
-        surveys: surveysCount,
-        test_surveys: testSurveysCount
-      }
+      collectionNames: Object.keys(collectionsStatus).filter(name => collectionsStatus[name]),
+      counts: collectionCounts
     });
   } catch (error) {
     console.error('Error checking connection:', error);
