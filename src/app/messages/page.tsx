@@ -64,8 +64,15 @@ export default function MessagesPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [isCreatingChat, setIsCreatingChat] = useState(false);
+  const [newChatEmail, setNewChatEmail] = useState('');
+  const [searchResults, setSearchResults] = useState<{ email: string; name: string; }[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [conversationsLoaded, setConversationsLoaded] = useState(false);
   const { refreshUnreadCount, hasUnreadMessages, unreadByConversation } = useMessageNotifications();
+  const searchTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Custom function to get unread count since the context one isn't working
   const getUnreadCount = (conversationId: string) => {
@@ -122,26 +129,117 @@ export default function MessagesPage() {
     return processedConversations;
   }, []);
 
-  // Modify the fetchConversations function to use the transform function
-  const fetchConversations = async () => {
+  // Update fetchConversations to handle preloading
+  const fetchConversations = useCallback(async () => {
     if (!session?.user?.email) return;
-    
+
     try {
-      // Get conversations from Firebase
-      const result = await getConversationsByUser(session.user.email as string);
+      // Get conversations using Firebase service
+      const result = await getConversationsByUser(session.user.email);
       
-      if (result && result.length > 0) {
-        // Transform Firebase data using our helper function
-        const conversationData = await transformConversationData(result, session.user.email);
-        setConversations(conversationData);
-      }
+      // First set basic conversation data to show something quickly
+      const basicConversations = result.map(conv => {
+        return {
+          _id: conv._id as string,
+          participants: Array.isArray(conv.participants) 
+            ? conv.participants.map((p: any) => ({
+                _id: typeof p === 'string' ? p : p._id || p.email,
+                name: typeof p === 'string' ? '' : p.name || '',
+                image: typeof p === 'string' ? '' : p.image || ''
+              }))
+            : [],
+          otherParticipants: Array.isArray(conv.participants) 
+            ? conv.participants
+                .filter((p: any) => {
+                  const pId = typeof p === 'string' ? p : p._id || p.email;
+                  return pId !== session.user?.email;
+                })
+                .map((p: any) => ({
+                  _id: typeof p === 'string' ? p : p._id || p.email,
+                  name: typeof p === 'string' ? '' : p.name || '',
+                  image: typeof p === 'string' ? '' : p.image || ''
+                }))
+            : [],
+          lastMessage: conv.lastMessage 
+            ? {
+                content: typeof conv.lastMessage === 'string' 
+                  ? '' 
+                  : conv.lastMessage.content || '',
+                createdAt: typeof conv.lastMessage === 'string'
+                  ? new Date().toISOString()
+                  : conv.lastMessage.createdAt instanceof Timestamp
+                    ? conv.lastMessage.createdAt.toDate().toISOString()
+                    : new Date().toISOString()
+              }
+            : undefined,
+          isGroup: conv.isGroup || false,
+          name: conv.name || '',
+          updatedAt: conv.updatedAt instanceof Timestamp 
+            ? conv.updatedAt.toDate().toISOString() 
+            : conv.updatedAt instanceof Date
+              ? conv.updatedAt.toISOString()
+              : new Date().toISOString()
+        };
+      });
       
-      // Refresh unread counts after fetching conversations
-      await refreshUnreadCount();
+      // Set basic conversations first to show something on screen
+      setConversations(basicConversations);
+      
+      // Then enrich with detailed participant data
+      const enrichedConversations = await Promise.all(
+        result.map(async (conv) => {
+          // Enrich participants with full user data including images
+          const participantsWithDetail = await enrichParticipantsWithUserData(
+            Array.isArray(conv.participants) ? conv.participants : []
+          );
+          
+          // Filter to get other participants with complete data
+          const otherParticipants = participantsWithDetail
+            .filter((p: any) => p._id !== session.user?.email && p.email !== session.user?.email)
+            .map((p: any) => ({
+              _id: p._id,
+              name: p.name || '',
+              image: p.image || ''
+            }));
+          
+          return {
+            _id: conv._id as string,
+            participants: participantsWithDetail.map(p => ({
+              _id: p._id,
+              name: p.name || '',
+              image: p.image || ''
+            })),
+            otherParticipants,
+            lastMessage: conv.lastMessage 
+              ? {
+                  content: typeof conv.lastMessage === 'string' 
+                    ? '' 
+                    : conv.lastMessage.content || '',
+                  createdAt: typeof conv.lastMessage === 'string'
+                    ? new Date().toISOString()
+                    : conv.lastMessage.createdAt instanceof Timestamp
+                      ? conv.lastMessage.createdAt.toDate().toISOString()
+                      : new Date().toISOString()
+                }
+              : undefined,
+            isGroup: conv.isGroup || false,
+            name: conv.name || '',
+            updatedAt: conv.updatedAt instanceof Timestamp 
+              ? conv.updatedAt.toDate().toISOString() 
+              : conv.updatedAt instanceof Date
+                ? conv.updatedAt.toISOString()
+                : new Date().toISOString()
+          };
+        })
+      );
+      
+      // Update with fully enriched data
+      setConversations(enrichedConversations);
+      setConversationsLoaded(true);
     } catch (error) {
       console.error('Error fetching conversations:', error);
     }
-  };
+  }, [session?.user?.email]);
 
   // Set up real-time listener for conversations
   // Memoize the query to prevent it from being recreated on every render
@@ -232,7 +330,7 @@ export default function MessagesPage() {
     
     // Initial data fetch before Firebase real-time updates take over
     fetchConversations();
-  }, [session]);
+  }, [session, fetchConversations]);
 
   // Helper function to get user display name from survey firstName or other sources
   const getName = async (userId: string): Promise<string> => {
@@ -259,22 +357,12 @@ export default function MessagesPage() {
         }
       }
       
-      // Use email username as fallback
-      if (userId.includes('@')) {
-        const username = userId.split('@')[0];
-        return username.charAt(0).toUpperCase() + username.slice(1);
-      }
-      
+      // Return 'User' instead of extracting from email
       return 'User';
     } catch (error) {
       console.error('Error getting user name:', error);
       
-      // Fallback to extracting from email
-      if (userId.includes('@')) {
-        const username = userId.split('@')[0];
-        return username.charAt(0).toUpperCase() + username.slice(1);
-      }
-      
+      // Return 'User' instead of extracting from email
       return 'User';
     }
   };
@@ -580,6 +668,34 @@ export default function MessagesPage() {
   const stableDeleteConversation = useCallback((e: React.MouseEvent, id: string) => {
     return deleteConversation(e, id);
   }, [deleteConversation]);
+
+  // Add loading state component
+  if (!conversationsLoaded && conversations.length === 0) {
+    return (
+      <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="w-full md:w-1/3 lg:w-1/4 border-r border-gray-200 dark:border-gray-700 h-screen overflow-y-auto p-4">
+          <div className="space-y-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="animate-pulse flex items-center p-3 rounded-lg">
+                <div className="w-12 h-12 bg-gray-300 dark:bg-gray-700 rounded-full mr-3"></div>
+                <div className="flex-1">
+                  <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-3/4 mb-2"></div>
+                  <div className="h-3 bg-gray-200 dark:bg-gray-800 rounded w-1/2"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="hidden md:flex md:flex-1 flex-col items-center justify-center bg-gray-100 dark:bg-gray-800">
+          <div className="text-gray-500 dark:text-gray-400 text-center p-8">
+            <div className="animate-pulse w-16 h-16 bg-gray-300 dark:bg-gray-700 rounded-full mx-auto mb-4"></div>
+            <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-48 mx-auto mb-2"></div>
+            <div className="h-3 bg-gray-200 dark:bg-gray-800 rounded w-32 mx-auto"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-white dark:bg-gray-900 py-4 px-4">

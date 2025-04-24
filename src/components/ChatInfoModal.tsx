@@ -41,14 +41,8 @@ export default function ChatInfoModal({
       return participant.name;
     }
     
-    // Try to extract email username if _id looks like an email
-    if (participant._id && participant._id.includes('@')) {
-      const username = participant._id.split('@')[0];
-      return username.charAt(0).toUpperCase() + username.slice(1); // Capitalize first letter
-    }
-    
-    // Fallback to user ID or 'Unknown User'
-    return participant._id || 'Unknown User';
+    // Instead of extracting from email, just return 'User'
+    return 'User';
   };
 
   return (

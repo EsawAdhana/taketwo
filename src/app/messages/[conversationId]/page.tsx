@@ -101,6 +101,7 @@ export default function ConversationPage({
   const [showReportModal, setShowReportModal] = useState(false);
   const { refreshUnreadCount, decrementUnreadCount } = useMessageNotifications();
   const [pendingMessages, setPendingMessages] = useState<Set<string>>(new Set());
+  const [participantsFullyLoaded, setParticipantsFullyLoaded] = useState<boolean>(false);
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
@@ -144,6 +145,30 @@ export default function ConversationPage({
         };
         
         setConversation(conversationData);
+        
+        // Now enrich the participants data to avoid the flash of default content
+        if (Array.isArray(result.participants)) {
+          const enrichedParticipants = await enrichParticipantsWithUserData(result.participants);
+          const enrichedOtherParticipants = enrichedParticipants.filter(p => p._id !== session?.user?.email);
+          
+          setConversation(prev => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              participants: enrichedParticipants.map(p => ({
+                _id: p._id,
+                name: p.name || '',
+                image: p.image || ''
+              })),
+              otherParticipants: enrichedOtherParticipants.map(p => ({
+                _id: p._id,
+                name: p.name || '',
+                image: p.image || ''
+              }))
+            };
+          });
+          setParticipantsFullyLoaded(true);
+        }
       } else {
         console.error('Conversation not found');
       }
@@ -620,8 +645,16 @@ export default function ConversationPage({
       return;
     }
     
-    fetchConversation();
-    fetchMessages();
+    // Immediately show loading state
+    setIsLoading(true);
+    
+    // Fetch conversation data with priority
+    const loadData = async () => {
+      await fetchConversation();
+      fetchMessages();
+    };
+    
+    loadData();
     
     // Cleanup is handled by the hook
     return () => {};
@@ -827,20 +860,8 @@ export default function ConversationPage({
       return user.name;
     }
     
-    // Try to extract email username if _id looks like an email
-    if (user._id && user._id.includes('@')) {
-      const username = user._id.split('@')[0];
-      return username.charAt(0).toUpperCase() + username.slice(1); // Capitalize first letter
-    }
-    
-    // Try to extract email username if email field exists
-    if (user.email && user.email.includes('@')) {
-      const username = user.email.split('@')[0];
-      return username.charAt(0).toUpperCase() + username.slice(1); // Capitalize first letter
-    }
-    
-    // Fallback to user ID or 'Unknown User'
-    return user._id || 'Unknown User';
+    // Return 'User' instead of extracting from email
+    return 'User';
   };
 
   // Format date
@@ -897,6 +918,20 @@ export default function ConversationPage({
       document.head.removeChild(style);
     };
   }, []);
+
+  // Add a conditional rendering based on loading state
+  if (isLoading && !participantsFullyLoaded) {
+    return (
+      <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="animate-pulse text-center">
+            <div className="w-12 h-12 rounded-full bg-gray-300 dark:bg-gray-700 mx-auto mb-4"></div>
+            <div className="h-4 w-32 bg-gray-300 dark:bg-gray-700 rounded mx-auto"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!conversation) {
     return (
