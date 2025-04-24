@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { FiX, FiUsers, FiTrash2, FiLogOut } from 'react-icons/fi';
 import Image from 'next/image';
 
@@ -5,6 +6,7 @@ interface Participant {
   _id: string;
   name: string;
   image: string;
+  isDeleted?: boolean;
 }
 
 interface ChatInfoProps {
@@ -22,6 +24,11 @@ interface ChatInfoProps {
   isDeleting: boolean;
 }
 
+// Helper function to check if a participant is a deleted user
+const isDeletedUser = (participant: Participant): boolean => {
+  return participant?.isDeleted === true || participant?._id?.startsWith('deleted_');
+};
+
 export default function ChatInfoModal({
   conversation,
   currentUserId,
@@ -36,6 +43,11 @@ export default function ChatInfoModal({
 
   // Helper function to get user display name
   const getName = (participant: Participant): string => {
+    // Check if this is a deleted user
+    if (isDeletedUser(participant)) {
+      return "Deleted User";
+    }
+    
     // Use name from participant profile if available and not empty/default
     if (participant.name && participant.name !== 'User' && participant.name.trim() !== '') {
       return participant.name;
@@ -74,17 +86,21 @@ export default function ChatInfoModal({
                 className={`flex items-center p-3 rounded-lg ${
                   participant._id === currentUserId 
                     ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800' 
-                    : 'hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer'
+                    : isDeletedUser(participant)
+                      ? 'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700'
+                      : 'hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer'
                 }`}
                 onClick={() => {
-                  if (participant._id !== currentUserId) {
+                  if (participant._id !== currentUserId && !isDeletedUser(participant)) {
                     onViewProfile(participant);
                   }
                 }}
               >
                 <div className="relative w-10 h-10 mr-3">
                   <Image
-                    src={participant.image || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23cccccc"%3E%3Cpath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/%3E%3C/svg%3E'}
+                    src={isDeletedUser(participant) 
+                      ? 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23888888"%3E%3Cpath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/%3E%3C/svg%3E'
+                      : participant.image || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23cccccc"%3E%3Cpath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/%3E%3C/svg%3E'}
                     alt={getName(participant)}
                     fill
                     sizes="(max-width: 768px) 40px, 40px"
@@ -96,17 +112,38 @@ export default function ChatInfoModal({
                     </div>
                   )}
                 </div>
-                <div className="flex-1">
-                  <h3 className="font-medium text-gray-900 dark:text-gray-100 flex items-center">
+                <div>
+                  <div className="text-sm font-medium text-gray-800 dark:text-gray-200">
                     {getName(participant)}
-                    {participant._id === currentUserId && (
-                      <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">(You)</span>
-                    )}
-                  </h3>
+                    {participant._id === currentUserId ? ' (You)' : ''}
+                  </div>
+                  {isDeletedUser(participant) && (
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      This user has deleted their account
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
           </div>
+        </div>
+        
+        {/* Footer */}
+        <div className="border-t border-gray-200 dark:border-gray-700 p-4">
+          <button
+            onClick={onDeleteConversation}
+            disabled={isDeleting}
+            className="w-full px-4 py-2 bg-red-50 dark:bg-red-900/20 border border-red-500 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-800/30 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {isDeleting ? (
+              <>
+                <span className="animate-spin h-4 w-4 border-2 border-red-500 dark:border-red-400 border-t-transparent rounded-full"></span>
+                Deleting...
+              </>
+            ) : (
+              'Delete Conversation'
+            )}
+          </button>
         </div>
       </div>
     </div>

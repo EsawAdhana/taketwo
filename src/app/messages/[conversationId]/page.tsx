@@ -588,10 +588,19 @@ export default function ConversationPage({
     }
   };
 
-  // Handle profile picture click
+  // Helper function to check if a participant is a deleted user
+  const isDeletedUser = (participant: any): boolean => {
+    return participant?.isDeleted === true || participant?._id?.startsWith('deleted_');
+  };
+
+  // Modify handleProfileClick to handle deleted users
   const handleProfileClick = async (participant: Participant) => {
-    // Skip if clicking on own profile
-    if (participant._id === session?.user?.id || participant._id === session?.user?.email) return;
+    // Skip if clicking on own profile or a deleted user
+    if (participant._id === session?.user?.id || 
+        participant._id === session?.user?.email || 
+        isDeletedUser(participant)) {
+      return;
+    }
     
     // Set the selected user
     setSelectedUser({
@@ -777,6 +786,12 @@ export default function ConversationPage({
   const getProfileImage = (user: any): string | null => {
     if (!user) return null;
     
+    // Special case for deleted users
+    if (isDeletedUser(user)) {
+      // Return a generic "deleted user" image
+      return 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23888888"%3E%3Cpath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/%3E%3C/svg%3E';
+    }
+    
     // Check all possible image paths in order of preference
     if (user.image && user.image !== "") return user.image;
     
@@ -806,8 +821,13 @@ export default function ConversationPage({
   };
 
   // Also update the getName function to check the correct profile paths
-  const getName = (user: {_id?: string, name?: string, email?: string, profile?: any} | null, fullProfile?: any): string => {
+  const getName = (user: {_id?: string, name?: string, email?: string, profile?: any, isDeleted?: boolean} | null, fullProfile?: any): string => {
     if (!user) return 'Unknown User';
+    
+    // If this is a deleted user, return "Deleted User"
+    if (isDeletedUser(user)) {
+      return "Deleted User";
+    }
     
     // Check if this is the current user - if so, just return "You"
     if (user._id === session?.user?.id || user._id === session?.user?.email) {

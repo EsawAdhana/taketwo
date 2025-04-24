@@ -10,6 +10,7 @@ import {
   doc, 
   getDoc, 
   deleteDoc,
+  updateDoc,
   usersCollection,
   surveysCollection,
   conversationsCollection,
@@ -100,8 +101,8 @@ export async function DELETE() {
     // Track deletion statistics
     let surveyDeleted = false;
     let userDeleted = false;
-    let messagesDeleted = 0;
-    let conversationsDeleted = 0;
+    let conversationsUpdated = 0;
+    let messagesUpdated = 0;
     
     // 1. Delete the user's survey data
     const surveyDoc = await getDoc(doc(surveysCollection, userEmail));
@@ -110,7 +111,7 @@ export async function DELETE() {
       surveyDeleted = true;
     }
 
-    // 2. Delete any messages or conversations the user is part of
+    // 2. Update conversations instead of deleting them
     if (userDoc.exists()) {
       // Find conversations the user is part of
       const conversationsQuery = query(
@@ -121,25 +122,115 @@ export async function DELETE() {
       const conversationsSnapshot = await getDocs(conversationsQuery);
       
       if (!conversationsSnapshot.empty) {
-        const conversationIds = conversationsSnapshot.docs.map(doc => doc.id);
-        
-        // Delete all messages from these conversations
-        for (const conversationId of conversationIds) {
-          const messagesQuery = query(
-            messagesCollection,
-            where('conversationId', '==', conversationId)
-          );
+        for (const conversationDoc of conversationsSnapshot.docs) {
+          const conversation = conversationDoc.data();
+          const conversationId = conversationDoc.id;
           
-          const messagesSnapshot = await getDocs(messagesQuery);
-          
-          for (const messageDoc of messagesSnapshot.docs) {
-            await deleteDoc(doc(messagesCollection, messageDoc.id));
-            messagesDeleted++;
+          // Update the participant information with anonymous placeholder
+          if (Array.isArray(conversation.participants)) {
+            const updatedParticipants = conversation.participants.map((p: any) => {
+              if (typeof p === 'string' && p === userEmail) {
+                // Replace with anonymous user object
+                return {
+                  _id: `deleted_${userEmail}`,
+                  name: 'Deleted User',
+                  image: '',
+                  isDeleted: true
+                };
+              } else if (typeof p === 'object' && (p._id === userEmail || p.email === userEmail)) {
+                // Replace user object with anonymous version
+                return {
+                  _id: `deleted_${userEmail}`,
+                  name: 'Deleted User',
+                  image: '',
+                  isDeleted: true
+                };
+              }
+              return p;
+            });
+            
+            // Update the conversation with the modified participants
+            await updateDoc(doc(conversationsCollection, conversationId), {
+              participants: updatedParticipants
+            });
+            
+            conversationsUpdated++;
+            
+            // Now update all messages from this user in this conversation
+            const messagesQuery = query(
+              messagesCollection,
+              where('conversationId', '==', conversationId)
+            );
+            
+            const messagesSnapshot = await getDocs(messagesQuery);
+            
+            for (const messageDoc of messagesSnapshot.docs) {
+              const message = messageDoc.data();
+              
+              // Check if this message was sent by the deleted user
+              let needsUpdate = false;
+              let updatedSenderId;
+              
+              if (typeof message.senderId === 'string' && message.senderId === userEmail) {
+                needsUpdate = true;
+                updatedSenderId = {
+                  _id: `deleted_${userEmail}`,
+                  name: 'Deleted User',
+                  image: '',
+                  isDeleted: true
+                };
+              } else if (typeof message.senderId === 'object' && 
+                        (message.senderId._id === userEmail || message.senderId.email === userEmail)) {
+                needsUpdate = true;
+                updatedSenderId = {
+                  _id: `deleted_${userEmail}`,
+                  name: 'Deleted User',
+                  image: '',
+                  isDeleted: true
+                };
+              }
+              
+              // If the user is in the readBy array, update it too
+              let updatedReadBy;
+              if (Array.isArray(message.readBy)) {
+                updatedReadBy = message.readBy.map((reader: any) => {
+                  if (typeof reader === 'string' && reader === userEmail) {
+                    return `deleted_${userEmail}`;
+                  } else if (typeof reader === 'object' && 
+                            (reader._id === userEmail || reader.email === userEmail)) {
+                    return {
+                      _id: `deleted_${userEmail}`,
+                      name: 'Deleted User',
+                      image: '',
+                      isDeleted: true
+                    };
+                  }
+                  return reader;
+                });
+                
+                // Only mark as needing update if readBy was changed
+                if (JSON.stringify(updatedReadBy) !== JSON.stringify(message.readBy)) {
+                  needsUpdate = true;
+                }
+              }
+              
+              // Update the message if needed
+              if (needsUpdate) {
+                const updateData: any = {};
+                
+                if (updatedSenderId) {
+                  updateData.senderId = updatedSenderId;
+                }
+                
+                if (updatedReadBy) {
+                  updateData.readBy = updatedReadBy;
+                }
+                
+                await updateDoc(doc(messagesCollection, messageDoc.id), updateData);
+                messagesUpdated++;
+              }
+            }
           }
-          
-          // Delete the conversation
-          await deleteDoc(doc(conversationsCollection, conversationId));
-          conversationsDeleted++;
         }
       }
       
@@ -160,8 +251,8 @@ export async function DELETE() {
       details: {
         surveyDeleted,
         userDeleted,
-        messagesDeleted,
-        conversationsDeleted
+        conversationsUpdated,
+        messagesUpdated
       }
     }, { status: 200 });
   } catch (error) {
