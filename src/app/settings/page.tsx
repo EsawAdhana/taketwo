@@ -17,10 +17,20 @@ export default function SettingsPage() {
 
   // Format date helper function
   const formatDate = (date: Date): string => {
-    return date.toLocaleDateString('en-US', {
+    // Create a new date using the UTC components to prevent timezone offset issues
+    const utcDate = new Date(
+      Date.UTC(
+        date.getUTCFullYear(),
+        date.getUTCMonth(),
+        date.getUTCDate()
+      )
+    );
+    
+    return utcDate.toLocaleDateString('en-US', {
       month: 'short', 
       day: 'numeric', 
-      year: 'numeric'
+      year: 'numeric',
+      timeZone: 'UTC' // Force UTC timezone for display
     });
   };
 

@@ -142,7 +142,22 @@ export default function DashboardPage() {
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+      
+      // Create a new date using UTC components to prevent timezone offset issues
+      const utcDate = new Date(
+        Date.UTC(
+          date.getUTCFullYear(),
+          date.getUTCMonth(),
+          date.getUTCDate()
+        )
+      );
+      
+      return utcDate.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric',
+        timeZone: 'UTC' // Force UTC timezone for display
+      });
     } catch (e) {
       return dateString || 'N/A';
     }
