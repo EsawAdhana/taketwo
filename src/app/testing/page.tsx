@@ -226,7 +226,7 @@ export default function TestingPage() {
         // Success! Show verification counts
         setError(null);
         // Show success message with counts
-        setSuccess(`Successfully added ${numUsersToAdd} test users. Verification: ${data.verificationCounts.surveys} surveys.`);
+        setSuccess(`Successfully added ${data.count || numUsersToAdd} test users.`);
         // Directly fetch debug info which now includes test users
         fetchDebugInfo();
         // Fetch test users for the UI
