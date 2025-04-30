@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { SurveyFormData } from '@/constants/survey-constants';
 import Image from 'next/image';
-import { FiUsers, FiHome, FiDollarSign, FiCalendar, FiList, FiStar, FiFlag, FiX, FiMapPin, FiMessageCircle, FiInfo } from 'react-icons/fi';
+import { FiUsers, FiHome, FiDollarSign, FiCalendar, FiList, FiStar, FiFlag, FiX, FiMapPin, FiMessageCircle, FiInfo, FiBarChart2 } from 'react-icons/fi';
 import ReportUserModal from '@/components/ReportUserModal';
 import UserProfileModal from '@/components/UserProfileModal';
 import Modal from '@/components/Modal';
@@ -30,6 +30,10 @@ interface CompatibilityMatch {
     genderScore: number;
     timingScore: number;
     preferencesScore: number;
+    additionalInfoScore?: number;
+  };
+  explanations?: {
+    additionalNotesExplanation?: string;
   };
   fullProfile?: {
     firstName?: string;
@@ -64,6 +68,8 @@ export default function DashboardPage() {
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showBreakdownModal, setShowBreakdownModal] = useState(false);
+  const [selectedBreakdown, setSelectedBreakdown] = useState<CompatibilityMatch | null>(null);
   
   useEffect(() => {
     const fetchSurveyData = async () => {
@@ -96,7 +102,8 @@ export default function DashboardPage() {
         );
         
         if (result && result.matches) {
-          setRecommendations(result.matches);
+          // Cast the API response to the expected type
+          setRecommendations(result.matches as unknown as CompatibilityMatch[]);
         }
       } catch (error) {
         console.error('Error fetching recommendations:', error);
@@ -396,6 +403,19 @@ export default function DashboardPage() {
                         )}
                       </div>
 
+                      {/* Breakdown button */}
+                      <div 
+                        className="absolute top-2 left-2 w-6 h-6 bg-white dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full flex items-center justify-center shadow cursor-pointer transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedBreakdown(match);
+                          setShowBreakdownModal(true);
+                        }}
+                        title="View compatibility breakdown"
+                      >
+                        <FiBarChart2 className="h-3.5 w-3.5 text-gray-700 dark:text-gray-300" />
+                      </div>
+
                       <div 
                         className="flex-1 cursor-pointer"
                         onClick={() => viewUserDetails(match)}
@@ -485,6 +505,224 @@ export default function DashboardPage() {
           onClose={() => setShowReportModal(false)}
           onSuccess={handleReportSuccess}
         />
+      )}
+
+      {/* Compatibility Breakdown Modal */}
+      {showBreakdownModal && selectedBreakdown && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" onClick={() => setShowBreakdownModal(false)}>
+              <div className="absolute inset-0 bg-gray-500 opacity-75 dark:bg-gray-900 dark:opacity-90"></div>
+            </div>
+            
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+            
+            <div 
+              className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-blue-500 dark:bg-blue-600 px-6 py-4 flex justify-between items-center">
+                <h3 className="text-xl font-semibold text-white">
+                  Compatibility Breakdown
+                </h3>
+                <button 
+                  onClick={() => setShowBreakdownModal(false)}
+                  className="text-white hover:text-gray-200"
+                >
+                  <FiX className="h-6 w-6" />
+                </button>
+              </div>
+              
+              <div className="p-6">
+                <div className="mb-6 flex items-center">
+                  <div className="mr-4">
+                    {selectedBreakdown.userProfile.image ? (
+                      <Image 
+                        src={selectedBreakdown.userProfile.image} 
+                        alt={getName(selectedBreakdown.userProfile, selectedBreakdown.fullProfile)} 
+                        width={50} 
+                        height={50} 
+                        className="rounded-full"
+                      />
+                    ) : (
+                      <div className="w-[50px] h-[50px] bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+                        <span className="text-white text-lg font-semibold">
+                          {getName(selectedBreakdown.userProfile, selectedBreakdown.fullProfile)[0]}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-semibold dark:text-white">
+                      {getName(selectedBreakdown.userProfile, selectedBreakdown.fullProfile)}
+                    </h4>
+                    <div className={`px-3 py-1 rounded-full font-medium text-sm inline-flex items-center
+                      ${selectedBreakdown.score >= 85 ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 
+                      selectedBreakdown.score >= 70 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' : 
+                      'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}`}
+                    >
+                      <FiStar className="mr-1" /> {Math.round(selectedBreakdown.score)}% Overall Match
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-5">
+                  {/* Location Score */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <h5 className="font-medium flex items-center dark:text-white">
+                        <FiMapPin className="mr-2 text-blue-500" /> Location Compatibility
+                      </h5>
+                      <span className="font-semibold text-lg dark:text-white">
+                        {Math.round(selectedBreakdown.compatibilityDetails.locationScore)}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                      <div 
+                        className="bg-blue-500 h-2.5 rounded-full" 
+                        style={{ width: `${Math.round(selectedBreakdown.compatibilityDetails.locationScore)}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                      Based on matching housing regions, cities, and proximity preferences.
+                    </p>
+                  </div>
+                  
+                  {/* Budget Score */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <h5 className="font-medium flex items-center dark:text-white">
+                        <FiDollarSign className="mr-2 text-green-500" /> Budget Compatibility
+                      </h5>
+                      <span className="font-semibold text-lg dark:text-white">
+                        {Math.round(selectedBreakdown.compatibilityDetails.budgetScore)}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                      <div 
+                        className="bg-green-500 h-2.5 rounded-full" 
+                        style={{ width: `${Math.round(selectedBreakdown.compatibilityDetails.budgetScore)}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                      Based on overlapping rental budget ranges.
+                    </p>
+                  </div>
+                  
+                  {/* Gender Score */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <h5 className="font-medium flex items-center dark:text-white">
+                        <FiUsers className="mr-2 text-purple-500" /> Gender Preferences
+                      </h5>
+                      <span className="font-semibold text-lg dark:text-white">
+                        {Math.round(selectedBreakdown.compatibilityDetails.genderScore)}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                      <div 
+                        className="bg-purple-500 h-2.5 rounded-full" 
+                        style={{ width: `${Math.round(selectedBreakdown.compatibilityDetails.genderScore)}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                      Based on gender preferences for roommates.
+                    </p>
+                  </div>
+                  
+                  {/* Timing Score */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <h5 className="font-medium flex items-center dark:text-white">
+                        <FiCalendar className="mr-2 text-amber-500" /> Timing Compatibility
+                      </h5>
+                      <span className="font-semibold text-lg dark:text-white">
+                        {Math.round(selectedBreakdown.compatibilityDetails.timingScore)}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                      <div 
+                        className="bg-amber-500 h-2.5 rounded-full" 
+                        style={{ width: `${Math.round(selectedBreakdown.compatibilityDetails.timingScore)}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                      Based on overlapping internship/housing dates.
+                    </p>
+                  </div>
+                  
+                  {/* Preferences Score */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <h5 className="font-medium flex items-center dark:text-white">
+                        <FiList className="mr-2 text-red-500" /> Lifestyle Preferences
+                      </h5>
+                      <span className="font-semibold text-lg dark:text-white">
+                        {Math.round(selectedBreakdown.compatibilityDetails.preferencesScore)}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                      <div 
+                        className="bg-red-500 h-2.5 rounded-full" 
+                        style={{ width: `${Math.round(selectedBreakdown.compatibilityDetails.preferencesScore)}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                      Based on matching lifestyle preferences like cleanliness, socializing, and other habits.
+                    </p>
+                  </div>
+                  
+                  {/* Internship Company - Same Company Bonus */}
+                  {selectedBreakdown.fullProfile?.internshipCompany && 
+                   surveyData?.internshipCompany === selectedBreakdown.fullProfile.internshipCompany && (
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <h5 className="font-medium flex items-center dark:text-white">
+                          <FiHome className="mr-2 text-indigo-500" /> Company Match
+                        </h5>
+                        <span className="font-semibold text-sm bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 px-2 py-1 rounded-lg">
+                          1.25x Multiplier
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                        You both are interning at the same company! This applies a 1.25x multiplier to your compatibility score.
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Additional Notes Adjustment */}
+                  {selectedBreakdown.explanations?.additionalNotesExplanation && 
+                   selectedBreakdown.compatibilityDetails.additionalInfoScore !== undefined && 
+                   selectedBreakdown.compatibilityDetails.additionalInfoScore !== 50 && (
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <h5 className="font-medium flex items-center dark:text-white">
+                          <FiMessageCircle className="mr-2 text-teal-500" /> Notes Analysis
+                        </h5>
+                        <span className={`font-semibold text-sm px-2 py-1 rounded-lg ${
+                          selectedBreakdown.compatibilityDetails.additionalInfoScore > 50 
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' 
+                            : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
+                        }`}>
+                          {selectedBreakdown.compatibilityDetails.additionalInfoScore > 50
+                            ? `+${((selectedBreakdown.compatibilityDetails.additionalInfoScore - 50) / 5).toFixed(1)}% Bonus`
+                            : `-${((50 - selectedBreakdown.compatibilityDetails.additionalInfoScore) / 5).toFixed(1)}% Penalty`}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="mt-8 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    <FiInfo className="inline-block mr-1" /> 
+                    These scores are calculated based on the information provided in your housing preferences survey.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );
