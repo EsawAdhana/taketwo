@@ -17,6 +17,7 @@ import {
   addDoc
 } from './firebase';
 import { User } from 'next-auth';
+import { getRecommendedMatches } from '@/utils/recommendationEngine';
 
 // Add a new collection reference for surveys
 const surveysCollection = collection(db, 'surveys');
@@ -391,8 +392,10 @@ export const createOrUpdateSurvey = async (userEmail: string, surveyData: any) =
   const surveyRef = doc(surveysCollection, userEmail);
   const now = Timestamp.now();
   
+  // Ensure userEmail is included in the survey data
   const updatedData = {
     ...surveyData,
+    userEmail: userEmail, // Always add/overwrite the userEmail field
     updatedAt: now
   };
   
@@ -419,138 +422,46 @@ export const createOrUpdateSurvey = async (userEmail: string, surveyData: any) =
 // Recommendation Methods
 export const getRecommendationsByUser = async (userEmail: string, showTestUsers: boolean = false) => {
   try {
-    // First, get all users with submitted surveys
-    const surveysQuery = query(
-      surveysCollection,
-      where('isSubmitted', '==', true)
+    // Use the recommendation engine to get matches
+    const matchesResult = await getRecommendedMatches(userEmail, undefined, undefined, true, showTestUsers);
+    
+    // Get user data for each match
+    const enrichedMatches = await Promise.all(
+      matchesResult
+        // Filter out any matches with empty or undefined userEmail
+        .filter(match => match.userEmail && match.userEmail.trim() !== '')
+        .map(async (match) => {
+          const otherUserEmail = match.userEmail;
+          
+          // Get user profile info
+          const userDoc = await getUser(otherUserEmail);
+          
+          // Get the full survey data
+          const surveyRef = doc(surveysCollection, otherUserEmail);
+          const surveyDoc = await getDoc(surveyRef);
+          const surveyData = surveyDoc.exists() ? surveyDoc.data() : {};
+          
+          return {
+            userEmail: otherUserEmail,
+            userProfile: {
+              name: userDoc?.name || 'User',
+              email: otherUserEmail,
+              image: userDoc?.image || ''
+            },
+            fullProfile: surveyData,
+            score: match.score,
+            compatibilityDetails: match.compatibilityDetails,
+            explanations: match.explanations
+          };
+        })
     );
     
-    const userSurveyRef = doc(surveysCollection, userEmail);
-    const userSurveyDoc = await getDoc(userSurveyRef);
-    
-    if (!userSurveyDoc.exists()) {
-      return { matches: [] };
-    }
-    
-    const userSurveyData = userSurveyDoc.data();
-    const surveysSnapshot = await getDocs(surveysQuery);
-    
-    // Calculate compatibility scores
-    const matches = [];
-    
-    for (const doc of surveysSnapshot.docs) {
-      const otherUserEmail = doc.id;
-      
-      // Skip own survey and non-test users if requested
-      if (otherUserEmail === userEmail) continue;
-      
-      const isTestUser = otherUserEmail.includes('test');
-      if (!showTestUsers && isTestUser) continue;
-      
-      const otherSurveyData = doc.data();
-      
-      // Calculate compatibility score (implementation depends on your algorithm)
-      const compatibilityScore = calculateCompatibilityScore(userSurveyData, otherSurveyData);
-      
-      if (compatibilityScore.score > 0) {
-        // Get user profile info
-        const userDoc = await getUser(otherUserEmail);
-        
-        // Include both the auth name and the firstName from the survey
-        matches.push({
-          userEmail: otherUserEmail,
-          userProfile: {
-            name: userDoc?.name || 'User',
-            email: otherUserEmail,
-            image: userDoc?.image || ''
-          },
-          // Add the survey data including firstName
-          fullProfile: otherSurveyData,
-          score: compatibilityScore.score,
-          compatibilityDetails: compatibilityScore.details
-        });
-      }
-    }
-    
-    // Sort by score (highest first)
-    matches.sort((a, b) => b.score - a.score);
-    
-    return { matches };
+    return { matches: enrichedMatches };
   } catch (error) {
     console.error('Error getting recommendations:', error);
     return { matches: [] };
   }
 };
-
-// Helper function to calculate compatibility
-function calculateCompatibilityScore(userSurvey: any, otherSurvey: any) {
-  // This is a placeholder - you'll need to implement your actual compatibility algorithm
-  let score = 0;
-  
-  // Example scoring factors
-  const locationScore = userSurvey.housingRegion === otherSurvey.housingRegion ? 20 : 0;
-  
-  // Budget compatibility
-  let budgetScore = 0;
-  if (userSurvey.minBudget && userSurvey.maxBudget && 
-      otherSurvey.minBudget && otherSurvey.maxBudget) {
-    
-    const userAvgBudget = (userSurvey.minBudget + userSurvey.maxBudget) / 2;
-    const otherAvgBudget = (otherSurvey.minBudget + otherSurvey.maxBudget) / 2;
-    const budgetDiff = Math.abs(userAvgBudget - otherAvgBudget);
-    
-    // High score for similar budgets, lower for bigger differences
-    if (budgetDiff < 200) budgetScore = 20;
-    else if (budgetDiff < 500) budgetScore = 15;
-    else if (budgetDiff < 1000) budgetScore = 10;
-    else if (budgetDiff < 2000) budgetScore = 5;
-    else budgetScore = 0;
-  }
-  
-  // Gender compatibility
-  let genderScore = 0;
-  if (userSurvey.gender === otherSurvey.gender) {
-    genderScore = 20;
-  } else if (userSurvey.roomWithDifferentGender && otherSurvey.roomWithDifferentGender) {
-    genderScore = 15;
-  } else if (userSurvey.roomWithDifferentGender || otherSurvey.roomWithDifferentGender) {
-    genderScore = 5;
-  }
-  
-  // Timing compatibility
-  let timingScore = 0;
-  if (userSurvey.internshipStartDate && userSurvey.internshipEndDate && 
-      otherSurvey.internshipStartDate && otherSurvey.internshipEndDate) {
-    
-    // Check overlap in dates
-    const userStart = new Date(userSurvey.internshipStartDate);
-    const userEnd = new Date(userSurvey.internshipEndDate);
-    const otherStart = new Date(otherSurvey.internshipStartDate);
-    const otherEnd = new Date(otherSurvey.internshipEndDate);
-    
-    // Simple check for overlap
-    if (userStart <= otherEnd && otherStart <= userEnd) {
-      timingScore = 20;
-    }
-  }
-  
-  // Preferences compatibility (simplified)
-  let preferencesScore = 10; // Default value
-  
-  // Calculate total
-  score = locationScore + budgetScore + genderScore + timingScore + preferencesScore;
-  
-  return {
-    score,
-    details: {
-      locationScore,
-      budgetScore,
-      genderScore,
-      timingScore,
-      preferencesScore
-    }
-  };
-}
 
 export const searchUsers = async (searchQuery: string, currentUserEmail: string) => {
   try {
