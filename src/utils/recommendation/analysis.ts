@@ -15,7 +15,8 @@ export async function analyzeAdditionalNotes(
   if (!notes1 || !notes2 || notes1.trim() === '' || notes2.trim() === '') {
     return { 
       score: 0, 
-      explanation: "One or both users didn't provide additional notes." 
+      explanation: "One or both users didn't provide additional notes.",
+      prune: false 
     }; // Neutral if no notes to compare
   }
   
@@ -42,13 +43,15 @@ export async function analyzeAdditionalNotes(
     
     return {
       score: result.score || 0,
-      explanation: result.explanation || "No explanation provided by compatibility analysis."
+      explanation: result.explanation || "No explanation provided by compatibility analysis.",
+      prune: result.prune || false
     };
   } catch (error) {
     console.error('Error analyzing additional notes:', error);
     return { 
       score: 0, 
-      explanation: "Error occurred during compatibility analysis. Please try again later." 
+      explanation: "Error occurred during compatibility analysis. Please try again later.",
+      prune: false
     };
   }
 } 

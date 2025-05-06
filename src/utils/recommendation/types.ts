@@ -44,4 +44,5 @@ export interface UserComparisonResult {
 export interface NotesAnalysisResult {
   score: number;
   explanation: string;
+  prune: boolean;
 } 

@@ -52,32 +52,51 @@ export async function calculateEnhancedCompatibilityScore(
     potentialMatch.additionalNotes
   );
   
-  // Calculate score adjustment as a percentage (up to +/-10%)
-  // Convert -10 to +10 scale to a factor between -0.1 and +0.1
-  const adjustmentFactor = additionalInfoAdjustment.score / 100;
-  
-  // Apply adjustment to base score (max +/-10%)
-  let adjustedScore = baseScore.score * (1 + adjustmentFactor);
-  
-  // Clamp to ensure we never go below 0 or above 100
-  adjustedScore = Math.max(0, Math.min(100, adjustedScore));
-  
-  // If after adjustment, score falls below threshold, return null
-  if (adjustedScore < effectiveThreshold) {
+  // If the notes analysis indicates that this match should be pruned,
+  // return null immediately regardless of base score
+  if (additionalInfoAdjustment.prune) {
     return null;
   }
   
-  // Convert the -10 to +10 score to a 0-100 scale for UI display
-  // -10 maps to 0, 0 maps to 50, +10 maps to 100
-  const additionalInfoScore = ((additionalInfoAdjustment.score + 10) / 20) * 100;
+  // Get the raw OpenAI score (-10 to +10)
+  const rawScore = additionalInfoAdjustment.score;
   
-  // Create the enhanced score object with the adjusted score
+  // Extract the original preference and roommate scores
+  const originalPreferencesScore = baseScore.compatibilityDetails.preferencesScore;
+  const originalRoommateScore = baseScore.compatibilityDetails.roommateScore || 0; // Use 0 if not available
+  
+  // Calculate combined preferences score with the formula from scoring.ts
+  // but add the OpenAI score directly as a percentage
+  // Original: preferencesScore * 0.8 + roommateScore * 0.2
+  // New: preferencesScore * 0.8 + roommateScore * 0.2 + rawOpenAIScore (as percentage points)
+  const combinedPreferencesScore = Math.max(0, Math.min(100, 
+    (originalPreferencesScore * 0.8 + originalRoommateScore * 0.2) + rawScore
+  ));
+  
+  // Calculate how much the preferences component changed
+  const originalCombinedScore = originalPreferencesScore * 0.8 + originalRoommateScore * 0.2;
+  const preferenceDifference = combinedPreferencesScore - originalCombinedScore;
+  
+  // Recalculate the total score - preferences are typically weighted at 30% of total score
+  const preferencesWeight = 0.3; // Typical weight for preferences in the overall score
+  const scoreAdjustment = preferenceDifference * preferencesWeight;
+  const adjustedTotalScore = Math.max(0, Math.min(100, baseScore.score + scoreAdjustment));
+  
+  // Calculate an adjusted raw preferences score that would yield our desired combined score
+  // Solving for x in: x * 0.8 + originalRoommateScore * 0.2 = combinedPreferencesScore
+  const adjustedRawPreferencesScore = Math.max(0, Math.min(100,
+    (combinedPreferencesScore - (originalRoommateScore * 0.2)) / 0.8
+  ));
+  
   return {
     userEmail: baseScore.userEmail,
-    score: adjustedScore,
+    score: adjustedTotalScore,
     compatibilityDetails: {
       ...baseScore.compatibilityDetails,
-      additionalInfoScore: additionalInfoScore
+      // Store the raw compatibility score (-10 to +10) from the additional notes analysis
+      additionalInfoScore: additionalInfoAdjustment.score,
+      // Set the adjusted preferences score that would yield our modified combined score
+      preferencesScore: adjustedRawPreferencesScore
     },
     explanations: {
       additionalNotesExplanation: additionalInfoAdjustment.explanation

@@ -30,6 +30,7 @@ interface CompatibilityMatch {
     genderScore: number;
     timingScore: number;
     preferencesScore: number;
+    roommateScore?: number;
     additionalInfoScore?: number;
   };
   explanations?: {
@@ -143,6 +144,18 @@ export default function DashboardPage() {
     } finally {
       setLoadingUserDetails(false);
     }
+  };
+  
+  // Helper function for preferences score - no longer adjusts based on additional info
+  const getAdjustedPreferencesScore = (match: CompatibilityMatch) => {
+    // If roommateScore is available, calculate the combined score with the same formula used in scoring.ts
+    if (match.compatibilityDetails.roommateScore) {
+      // Using the same formula: preferencesScore * 0.8 + roommateScore * 0.2
+      return match.compatibilityDetails.preferencesScore * 0.8 + match.compatibilityDetails.roommateScore * 0.2;
+    }
+    
+    // Fallback to just the preferences score if roommateScore is not available
+    return match.compatibilityDetails.preferencesScore;
   };
   
   // Format date for display
@@ -444,7 +457,7 @@ export default function DashboardPage() {
                               match.score >= 70 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' : 
                               'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}`}
                             >
-                              <FiStar className="mr-1" /> {Math.round(match.score)}% Match
+                              <FiStar className="mr-1" /> {Math.round(match.score)}% Match {match.compatibilityDetails.additionalInfoScore !== undefined && `[${match.compatibilityDetails.additionalInfoScore}]`}
                             </div>
                           </div>
                         </div>
@@ -472,7 +485,7 @@ export default function DashboardPage() {
                             <div className="text-gray-500 dark:text-gray-400 flex items-center">
                               <FiList className="mr-1" /> Preferences
                             </div>
-                            <div className="font-medium dark:text-gray-300">{Math.round(match.compatibilityDetails.preferencesScore)}%</div>
+                            <div className="font-medium dark:text-gray-300">{Math.round(getAdjustedPreferencesScore(match))}%</div>
                           </div>
                         </div>
                       </div>
@@ -561,7 +574,7 @@ export default function DashboardPage() {
                       selectedBreakdown.score >= 70 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' : 
                       'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}`}
                     >
-                      <FiStar className="mr-1" /> {Math.round(selectedBreakdown.score)}% Overall Match
+                      <FiStar className="mr-1" /> {Math.round(selectedBreakdown.score)}% Overall Match {selectedBreakdown.compatibilityDetails.additionalInfoScore !== undefined && `[${selectedBreakdown.compatibilityDetails.additionalInfoScore}]`}
                     </div>
                   </div>
                 </div>
@@ -658,17 +671,17 @@ export default function DashboardPage() {
                         <FiList className="mr-2 text-red-500" /> Lifestyle Preferences
                       </h5>
                       <span className="font-semibold text-lg dark:text-white">
-                        {Math.round(selectedBreakdown.compatibilityDetails.preferencesScore)}%
+                        {Math.round(getAdjustedPreferencesScore(selectedBreakdown))}%
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
                       <div 
                         className="bg-red-500 h-2.5 rounded-full" 
-                        style={{ width: `${Math.round(selectedBreakdown.compatibilityDetails.preferencesScore)}%` }}
+                        style={{ width: `${Math.round(getAdjustedPreferencesScore(selectedBreakdown))}%` }}
                       ></div>
                     </div>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                      Based on matching lifestyle preferences like cleanliness, socializing, and other habits.
+                      Based on matching lifestyle preferences from your survey responses.
                     </p>
                   </div>
                   
@@ -687,28 +700,6 @@ export default function DashboardPage() {
                       <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
                         You both are interning at the same company! This applies a 1.25x multiplier to your compatibility score.
                       </p>
-                    </div>
-                  )}
-                  
-                  {/* Additional Notes Adjustment */}
-                  {selectedBreakdown.explanations?.additionalNotesExplanation && 
-                   selectedBreakdown.compatibilityDetails.additionalInfoScore !== undefined && 
-                   selectedBreakdown.compatibilityDetails.additionalInfoScore !== 50 && (
-                    <div>
-                      <div className="flex justify-between items-center mb-1">
-                        <h5 className="font-medium flex items-center dark:text-white">
-                          <FiMessageCircle className="mr-2 text-teal-500" /> Notes Analysis
-                        </h5>
-                        <span className={`font-semibold text-sm px-2 py-1 rounded-lg ${
-                          selectedBreakdown.compatibilityDetails.additionalInfoScore > 50 
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' 
-                            : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
-                        }`}>
-                          {selectedBreakdown.compatibilityDetails.additionalInfoScore > 50
-                            ? `+${((selectedBreakdown.compatibilityDetails.additionalInfoScore - 50) / 5).toFixed(1)}% Bonus`
-                            : `-${((50 - selectedBreakdown.compatibilityDetails.additionalInfoScore) / 5).toFixed(1)}% Penalty`}
-                        </span>
-                      </div>
                     </div>
                   )}
                 </div>
