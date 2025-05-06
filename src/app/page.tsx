@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useSession, signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -52,10 +53,20 @@ export default function Home() {
               </p>
               <button
                 onClick={() => signIn('google')}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200 mb-2"
               >
                 Sign in with Google
               </button>
+              
+              <div className="mt-3 text-sm text-gray-500 flex justify-center space-x-4">
+                <Link href="/privacy-policy" className="hover:text-blue-600 hover:underline transition-colors">
+                  Privacy Policy
+                </Link>
+                <span>•</span>
+                <Link href="/terms-of-service" className="hover:text-blue-600 hover:underline transition-colors">
+                  Terms of Service
+                </Link>
+              </div>
             </>
           )}
         </div>
