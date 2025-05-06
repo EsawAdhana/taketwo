@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { SurveyFormData } from '@/constants/survey-constants';
 import Image from 'next/image';
-import { FiUsers, FiHome, FiDollarSign, FiCalendar, FiList, FiStar, FiFlag, FiX, FiMapPin, FiMessageCircle, FiInfo, FiBarChart2 } from 'react-icons/fi';
+import { FiUsers, FiHome, FiDollarSign, FiCalendar, FiList, FiStar, FiFlag, FiX, FiMapPin, FiMessageCircle, FiInfo, FiBarChart2, FiBriefcase } from 'react-icons/fi';
 import ReportUserModal from '@/components/ReportUserModal';
 import UserProfileModal from '@/components/UserProfileModal';
 import Modal from '@/components/Modal';
@@ -416,19 +416,6 @@ export default function DashboardPage() {
                         )}
                       </div>
 
-                      {/* Breakdown button */}
-                      <div 
-                        className="absolute top-2 left-2 w-6 h-6 bg-white dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full flex items-center justify-center shadow cursor-pointer transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedBreakdown(match);
-                          setShowBreakdownModal(true);
-                        }}
-                        title="View compatibility breakdown"
-                      >
-                        <FiBarChart2 className="h-3.5 w-3.5 text-gray-700 dark:text-gray-300" />
-                      </div>
-
                       <div 
                         className="flex-1 cursor-pointer"
                         onClick={() => viewUserDetails(match)}
@@ -451,13 +438,15 @@ export default function DashboardPage() {
                           </div>
                           
                           <div className="flex-1">
-                            <h3 className="text-lg font-semibold truncate dark:text-gray-100">{displayName}</h3>
+                            <div className="flex items-center">
+                              <h3 className="text-lg font-semibold truncate dark:text-gray-100">{displayName}</h3>
+                            </div>
                             <div className={`px-3 py-1 rounded-full font-medium text-sm inline-flex items-center
                               ${match.score >= 85 ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 
                               match.score >= 70 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' : 
                               'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}`}
                             >
-                              <FiStar className="mr-1" /> {Math.round(match.score)}% Match {match.compatibilityDetails.additionalInfoScore !== undefined && `[${match.compatibilityDetails.additionalInfoScore}]`}
+                              <FiStar className="mr-1" /> {Math.round(match.score)}% Match
                             </div>
                           </div>
                         </div>
@@ -507,6 +496,7 @@ export default function DashboardPage() {
           loading={loadingUserDetails}
           onReport={() => setShowReportModal(true)}
           displayName={`${getName(selectedUserDetails.userProfile, selectedUserDetails.fullProfile)}'s Profile`}
+          currentUserCompany={surveyData?.internshipCompany}
         />
       )}
 
@@ -574,7 +564,7 @@ export default function DashboardPage() {
                       selectedBreakdown.score >= 70 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' : 
                       'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}`}
                     >
-                      <FiStar className="mr-1" /> {Math.round(selectedBreakdown.score)}% Overall Match {selectedBreakdown.compatibilityDetails.additionalInfoScore !== undefined && `[${selectedBreakdown.compatibilityDetails.additionalInfoScore}]`}
+                      <FiStar className="mr-1" /> {Math.round(selectedBreakdown.score)}% Overall Match
                     </div>
                   </div>
                 </div>
