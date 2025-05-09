@@ -82,12 +82,12 @@ export async function POST(req: NextRequest) {
     const totalReportsSnapshot = await getDocs(totalReportsQuery);
     const totalReports = totalReportsSnapshot.size;
     
-    // If user has 3 or more reports (from anyone), permanently ban them
-    if (totalReports >= 3) {
+    // If user has 2 or more reports (from anyone), permanently ban them
+    if (totalReports >= 2) {
       // Add to banned users collection
       await addDoc(bannedUsersCollection, {
         userEmail: reportedUserEmail,
-        reason: 'Received 3 or more reports',
+        reason: 'Received 2 or more reports',
         reportCount: totalReports,
         bannedAt: now,
         permanent: true
