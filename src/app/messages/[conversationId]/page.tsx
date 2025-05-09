@@ -91,7 +91,6 @@ export default function ConversationPage({
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showChatInfo, setShowChatInfo] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -558,33 +557,6 @@ export default function ConversationPage({
       // Optionally notify the user about the error
     } finally {
       setIsSending(false);
-    }
-  };
-
-  // Delete the current conversation
-  const deleteConversation = async () => {
-    if (!window.confirm('Are you sure you want to delete this entire conversation? This action cannot be undone.')) {
-      return;
-    }
-    
-    setIsDeleting(true);
-    
-    try {
-      // Use Firebase service to delete the conversation
-      const result = await deleteFirebaseConversation(params.conversationId);
-      
-      if (result && result.success) {
-        // Redirect to the messages page after successful deletion
-        router.push('/messages');
-      } else {
-        console.error('Error deleting conversation');
-        alert('Failed to delete conversation. Please try again.');
-      }
-    } catch (error) {
-      console.error('Error deleting conversation:', error);
-      alert('Failed to delete conversation. Please try again.');
-    } finally {
-      setIsDeleting(false);
     }
   };
 
@@ -1139,14 +1111,21 @@ export default function ConversationPage({
               
               {/* Dropdown menu */}
               {showMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-700">
-                  <div className="py-1">
+                <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 z-50">
+                  <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
                     <button
-                      onClick={deleteConversation}
-                      className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                      disabled={isDeleting}
+                      onClick={() => setShowChatInfo(true)}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      role="menuitem"
                     >
-                      {isDeleting ? 'Deleting...' : 'Delete conversation'}
+                      Chat Info
+                    </button>
+                    <button
+                      onClick={() => setShowReportModal(true)}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      role="menuitem"
+                    >
+                      Report
                     </button>
                   </div>
                 </div>
@@ -1336,14 +1315,9 @@ export default function ConversationPage({
       {showChatInfo && conversation && (
         <ChatInfoModal
           conversation={conversation}
-          currentUserId={session?.user?.id}
+          currentUserId={session?.user?.email || ''}
           onClose={() => setShowChatInfo(false)}
-          onDeleteConversation={deleteConversation}
-          onViewProfile={(participant) => {
-            setShowChatInfo(false);
-            handleProfileClick(participant);
-          }}
-          isDeleting={isDeleting}
+          onViewProfile={handleProfileClick}
         />
       )}
       

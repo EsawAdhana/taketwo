@@ -19,9 +19,7 @@ interface ChatInfoProps {
   } | null;
   currentUserId?: string;
   onClose: () => void;
-  onDeleteConversation: () => void;
   onViewProfile: (participant: Participant) => void;
-  isDeleting: boolean;
 }
 
 // Helper function to check if a participant is a deleted user
@@ -33,9 +31,7 @@ export default function ChatInfoModal({
   conversation,
   currentUserId,
   onClose,
-  onDeleteConversation,
-  onViewProfile,
-  isDeleting
+  onViewProfile
 }: ChatInfoProps) {
   if (!conversation) {
     return null;
@@ -58,22 +54,18 @@ export default function ChatInfoModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-gray-800 rounded-lg max-w-md w-full mx-auto shadow-xl">
-        <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center">
-            <FiUsers className="mr-2" />
-            <span>
-              {conversation.isGroup ? conversation.name : 'Chat Members'} 
-              {conversation.participants.length > 0 && ` (${conversation.participants.length})`}
-            </span>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            Chat Info
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100"
-            aria-label="Close modal"
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           >
-            <FiX size={24} />
+            <FiX className="w-6 h-6" />
           </button>
         </div>
 
@@ -91,7 +83,7 @@ export default function ChatInfoModal({
                       : 'hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer'
                 }`}
                 onClick={() => {
-                  if (participant._id !== currentUserId && !isDeletedUser(participant)) {
+                  if (!isDeletedUser(participant) && participant._id !== currentUserId) {
                     onViewProfile(participant);
                   }
                 }}
@@ -126,24 +118,6 @@ export default function ChatInfoModal({
               </div>
             ))}
           </div>
-        </div>
-        
-        {/* Footer */}
-        <div className="border-t border-gray-200 dark:border-gray-700 p-4">
-          <button
-            onClick={onDeleteConversation}
-            disabled={isDeleting}
-            className="w-full px-4 py-2 bg-red-50 dark:bg-red-900/20 border border-red-500 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-800/30 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {isDeleting ? (
-              <>
-                <span className="animate-spin h-4 w-4 border-2 border-red-500 dark:border-red-400 border-t-transparent rounded-full"></span>
-                Deleting...
-              </>
-            ) : (
-              'Delete Conversation'
-            )}
-          </button>
         </div>
       </div>
     </div>

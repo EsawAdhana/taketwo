@@ -486,126 +486,64 @@ export default function MessagesPage() {
   };
 
   // Modified component to handle displaying conversation names properly - wrapped in memo to prevent unnecessary re-renders
-  const ConversationItem = memo(({ conversation, deleteConversation, hasUnreadMessages, getUnreadCount, deletingId }: { 
+  const ConversationItem = memo(({ conversation, hasUnreadMessages, getUnreadCount }: { 
     conversation: Conversation;
-    deleteConversation: (e: React.MouseEvent, id: string) => void;
     hasUnreadMessages: (id: string) => boolean;
     getUnreadCount: (id: string) => number;
-    deletingId: string | null;
   }) => {
-    const [displayName, setDisplayName] = useState<string>('');
     const conversationId = conversation._id;
-    
-    // Get the conversation name on mount and when conversation changes
-    useEffect(() => {
-      let isMounted = true;
-      
-      const loadName = async () => {
-        if (conversation.isGroup) {
-          if (isMounted) setDisplayName(conversation.name);
-        } else {
-          try {
-            const name = await getConversationName(conversation);
-            if (isMounted) setDisplayName(name);
-          } catch (error) {
-            console.error('Error loading conversation name:', error);
-            if (isMounted) setDisplayName('Unknown User');
-          }
-        }
-      };
-      
-      loadName();
-      
-      return () => {
-        isMounted = false;
-      };
-    }, [conversation, conversationId, getConversationName]);
-    
-    // Create a stable version of the delete handler
-    const handleDelete = useCallback((e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      deleteConversation(e, conversationId);
-    }, [conversationId, deleteConversation]);
-    
-    // Completely stable rendering with no state changes on hover
-    return (
-      <div className="relative mb-4">
-        {/* 
-          Use a stable class structure with no state-based classes that could change during hover 
-          Note: Using standard Tailwind CSS classes only - no custom transitions or animations
-        */}
-        <div 
-          className={`
-            conversation-item
-            bg-white dark:bg-gray-800 
-            rounded-xl shadow hover:shadow-md 
-            border border-gray-100 dark:border-gray-700 
-            overflow-hidden
-            ${hasUnreadMessages(conversationId) ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' : ''}
-          `}
-          style={{ position: 'relative' }} /* Use inline styles for critical positioning */
-        >
-          {/* Delete button with visibility controlled by CSS only */}
-          <div className="delete-button"
-            style={{
-              position: 'absolute',
-              top: '8px',
-              right: '8px',
-              zIndex: 20,
-              opacity: 0, /* Hidden by default */
-              transition: 'none' /* No transitions that could cause flicker */
-            }}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-          >
-            <button
-              onClick={handleDelete}
-              disabled={deletingId === conversationId}
-              className="p-2 rounded-full bg-white dark:bg-gray-700 shadow-md text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer"
-              title="Delete conversation"
-              aria-label="Delete conversation"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </button>
-          </div>
+    const displayName = useMemo(() => {
+      if (conversation.isGroup) {
+        return conversation.name;
+      }
+      return conversation.otherParticipants[0]?.name || 'Loading...';
+    }, [conversation.isGroup, conversation.name, conversation.otherParticipants]);
 
+    return (
+      <div className="conversation-item relative bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 mb-3">
+        <div
+          className="flex items-center p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 rounded-lg"
+          style={{ position: 'relative' }}
+        >
           {/* Message content */}
-          <div className="p-4 flex items-center space-x-4">
+          <div className="flex items-center space-x-4 flex-1">
             <div className="relative flex-shrink-0">
-              <div className="relative w-12 h-12">
+              <div className="relative w-14 h-14">
                 {conversation.isGroup ? (
-                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                    <FiUsers className="w-7 h-7 text-blue-600" />
+                  <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                    <FiUsers className="w-8 h-8 text-blue-600 dark:text-blue-400" />
                   </div>
                 ) : (
-                <Image
-                  src={memoizedGetConversationImage(conversation)}
-                  alt={displayName || 'Loading...'}
-                  fill
-                  sizes="(max-width: 768px) 48px, 48px"
-                  className="rounded-full object-cover"
-                />
+                  <Image
+                    src={memoizedGetConversationImage(conversation)}
+                    alt={displayName || 'Loading...'}
+                    fill
+                    sizes="(max-width: 768px) 56px, 56px"
+                    className="rounded-full object-cover border-2 border-gray-100 dark:border-gray-700"
+                  />
                 )}
               </div>
               {hasUnreadMessages(conversationId) && (
-                <div className="absolute -bottom-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center border-2 border-white dark:border-gray-800">
+                <div className="absolute -bottom-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white dark:border-gray-800">
                   {getUnreadCount(conversationId) > 99 ? '99+' : getUnreadCount(conversationId)}
                 </div>
               )}
             </div>
             
             <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <h2 className={`font-semibold truncate ${hasUnreadMessages(conversationId) ? 'text-blue-700 dark:text-blue-300' : 'text-gray-900 dark:text-gray-100'}`}>
+              <div className="flex items-center justify-between mb-1">
+                <h2 className={`font-semibold text-lg truncate ${hasUnreadMessages(conversationId) ? 'text-blue-700 dark:text-blue-300' : 'text-gray-900 dark:text-gray-100'}`}>
                   {displayName || (conversation.isGroup ? conversation.name : 'Loading...')}
                 </h2>
+                <span className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap ml-2">
+                  {new Date(conversation.updatedAt).toLocaleDateString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                    year: new Date(conversation.updatedAt).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
+                  })}
+                </span>
               </div>
-              <div className="flex items-center justify-between mt-1">
+              <div className="flex items-center justify-between">
                 {conversation.isGroup && (
                   <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -621,67 +559,24 @@ export default function MessagesPage() {
                 )}
               </div>
             </div>
-
-            {/* Date */}
-            <span className="text-sm text-gray-500 dark:text-gray-400">
-              {new Date(conversation.updatedAt).toLocaleDateString(undefined, {
-                month: 'short',
-                day: 'numeric',
-                year: new Date(conversation.updatedAt).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
-              })}
-            </span>
           </div>
           
-          {/* Clickable overlay with no transitions or animations */}
+          {/* Clickable overlay */}
           <Link
             href={`/messages/${conversationId}`}
             className="absolute inset-0 z-10 cursor-pointer"
             aria-label={`Open conversation with ${displayName || 'Loading...'}`}
             style={{ transition: 'none' }}
-            onClick={(e) => {
-              // Don't navigate if we're clicking on the delete button
-              if ((e.target as HTMLElement).closest('button')) {
-                e.preventDefault();
-              }
-            }}
           />
         </div>
-
-        {/* Custom styles injected once per component to control hover behavior */}
-        <style jsx>{`
-          /* Use direct CSS with no transitions that could cause flicker */
-          .conversation-item:hover .delete-button {
-            opacity: 1 !important;
-          }
-        `}</style>
       </div>
     );
   }, (prevProps, nextProps) => {
     // Only re-render if something important changed
-    // 1. If conversation ID changed (shouldn't happen)
     if (prevProps.conversation._id !== nextProps.conversation._id) return false;
-    
-    // 2. If delete state changed
-    if (prevProps.deletingId !== nextProps.deletingId) return false;
-    
-    // 3. If unread state changed
-    const prevUnread = prevProps.hasUnreadMessages(prevProps.conversation._id);
-    const nextUnread = nextProps.hasUnreadMessages(nextProps.conversation._id);
-    if (prevUnread !== nextUnread) return false;
-    
-    // 4. If unread count changed
-    const prevCount = prevProps.getUnreadCount(prevProps.conversation._id);
-    const nextCount = nextProps.getUnreadCount(nextProps.conversation._id);
-    if (prevCount !== nextCount) return false;
-    
-    // 5. If lastMessage changed
-    if (prevProps.conversation.lastMessage?.content !== nextProps.conversation.lastMessage?.content) return false;
-    
-    // 6. If updatedAt changed
-    if (prevProps.conversation.updatedAt !== nextProps.conversation.updatedAt) return false;
-    
-    // If we get here, props haven't meaningfully changed, don't re-render
-    return true; 
+    if (prevProps.hasUnreadMessages(prevProps.conversation._id) !== nextProps.hasUnreadMessages(nextProps.conversation._id)) return false;
+    if (prevProps.getUnreadCount(prevProps.conversation._id) !== nextProps.getUnreadCount(nextProps.conversation._id)) return false;
+    return true;
   });
   
   // For debugging purposes
@@ -731,11 +626,11 @@ export default function MessagesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-white dark:bg-gray-900 py-4 px-4">
+    <main className="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 px-4">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">Messages</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Messages</h1>
         {/* Conversations List */}
-        <div className="container mx-auto px-4 py-6">
+        <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto space-y-4">
             {conversations.length === 0 ? (
               <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center border border-gray-100 dark:border-gray-700 shadow-sm">
@@ -754,10 +649,8 @@ export default function MessagesPage() {
                 <ConversationItem
                   key={conversation._id}
                   conversation={conversation}
-                  deleteConversation={stableDeleteConversation}
                   hasUnreadMessages={stableHasUnreadMessages}
                   getUnreadCount={stableGetUnreadCount}
-                  deletingId={deletingId}
                 />
               ))
             )}
