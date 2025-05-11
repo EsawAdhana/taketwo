@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FiX, FiUsers, FiTrash2, FiLogOut } from 'react-icons/fi';
 import Image from 'next/image';
+import { getUser } from '@/lib/firebaseService';
 
 interface Participant {
   _id: string;
   name: string;
   image: string;
   isDeleted?: boolean;
+  email?: string;
 }
 
 interface ChatInfoProps {
@@ -33,6 +35,44 @@ export default function ChatInfoModal({
   onClose,
   onViewProfile
 }: ChatInfoProps) {
+  const [enrichedParticipants, setEnrichedParticipants] = useState<Participant[]>([]);
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!conversation) return;
+
+      const enriched = await Promise.all(
+        conversation.participants.map(async (participant) => {
+          // If we already have complete data, return it
+          if (participant.name && participant.image) {
+            return participant;
+          }
+
+          try {
+            // Try to get user data from Firebase
+            const userData = await getUser(participant._id);
+            if (userData) {
+              return {
+                ...participant,
+                name: userData.name || 'User',
+                image: userData.image || '',
+                email: userData.email
+              };
+            }
+          } catch (error) {
+            console.error('Error fetching user data:', error);
+          }
+
+          return participant;
+        })
+      );
+
+      setEnrichedParticipants(enriched);
+    };
+
+    fetchUserData();
+  }, [conversation]);
+
   if (!conversation) {
     return null;
   }
@@ -49,9 +89,18 @@ export default function ChatInfoModal({
       return participant.name;
     }
     
-    // Instead of extracting from email, just return 'User'
+    // If we have an email, use the part before @ as a fallback
+    if (participant.email) {
+      const emailName = participant.email.split('@')[0];
+      return emailName.charAt(0).toUpperCase() + emailName.slice(1);
+    }
+    
+    // Last resort fallback
     return 'User';
   };
+
+  // Use enriched participants if available, otherwise fall back to conversation participants
+  const displayParticipants = enrichedParticipants.length > 0 ? enrichedParticipants : conversation.participants;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -72,7 +121,7 @@ export default function ChatInfoModal({
         {/* Members List */}
         <div className="p-4">
           <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-            {conversation.participants.map((participant) => (
+            {displayParticipants.map((participant) => (
               <div
                 key={participant._id}
                 className={`flex items-center p-3 rounded-lg ${

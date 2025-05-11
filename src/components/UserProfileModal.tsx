@@ -60,8 +60,30 @@ export default function UserProfileModal({
   displayName = "Other's Profile",
   currentUserCompany
 }: UserProfileProps) {
+  // All hooks at the top!
   const [isReporting, setIsReporting] = useState(false);
   const [flash, setFlash] = useState(false);
+  
+  const fullProfile = userData?.surveyData || userData?.fullProfile;
+  const userName = getName(userProfile || undefined, fullProfile);
+  const userDisplayName = `${userName}'s Profile`;
+  
+  useEffect(() => {
+    if (fullProfile?.internshipCompany && 
+        currentUserCompany && 
+        fullProfile.internshipCompany === currentUserCompany) {
+      let flashCount = 0;
+      const interval = setInterval(() => {
+        setFlash(prev => !prev);
+        flashCount++;
+        if (flashCount >= 9) {
+          clearInterval(interval);
+          setFlash(false);
+        }
+      }, 700);
+      return () => clearInterval(interval);
+    }
+  }, [fullProfile, currentUserCompany]);
   
   if (loading) {
     return (
@@ -75,32 +97,6 @@ export default function UserProfileModal({
       </div>
     );
   }
-  
-  const fullProfile = userData?.surveyData || userData?.fullProfile;
-  const userName = getName(userProfile || undefined, fullProfile);
-  const userDisplayName = `${userName}'s Profile`;
-  
-  // Effect to flash the company text when the modal opens
-  useEffect(() => {
-    if (fullProfile?.internshipCompany && 
-        currentUserCompany && 
-        fullProfile.internshipCompany === currentUserCompany) {
-      // Flash sequence when company matches
-      let flashCount = 0;
-      const interval = setInterval(() => {
-        setFlash(prev => !prev);
-        flashCount++;
-        if (flashCount >= 9) {
-          clearInterval(interval);
-          setFlash(false);
-        }
-      }, 700);
-      
-      return () => {
-        clearInterval(interval);
-      };
-    }
-  }, [fullProfile, currentUserCompany]);
   
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">

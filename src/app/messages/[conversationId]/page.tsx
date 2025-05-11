@@ -30,7 +30,8 @@ import {
   getMessagesByConversation,
   markMessageAsRead as markFirebaseMessageAsRead,
   createMessage,
-  deleteConversation as deleteFirebaseConversation
+  deleteConversation as deleteFirebaseConversation,
+  enrichParticipantsWithUserData
 } from '@/lib/firebaseService';
 
 interface Participant {
@@ -46,6 +47,7 @@ interface Message {
     _id: string;
     name: string;
     image: string;
+    profile?: any;
   };
   readBy: {
     _id: string;
@@ -148,18 +150,18 @@ export default function ConversationPage({
         // Now enrich the participants data to avoid the flash of default content
         if (Array.isArray(result.participants)) {
           const enrichedParticipants = await enrichParticipantsWithUserData(result.participants);
-          const enrichedOtherParticipants = enrichedParticipants.filter(p => p._id !== session?.user?.email);
+          const enrichedOtherParticipants = enrichedParticipants.filter((p: Participant) => p._id !== session?.user?.email);
           
           setConversation(prev => {
             if (!prev) return null;
             return {
               ...prev,
-              participants: enrichedParticipants.map(p => ({
+              participants: enrichedParticipants.map((p: Participant) => ({
                 _id: p._id,
                 name: p.name || '',
                 image: p.image || ''
               })),
-              otherParticipants: enrichedOtherParticipants.map(p => ({
+              otherParticipants: enrichedOtherParticipants.map((p: Participant) => ({
                 _id: p._id,
                 name: p.name || '',
                 image: p.image || ''
@@ -699,7 +701,7 @@ export default function ConversationPage({
       if (!messages || messages.length === 0) return;
       
       // Get unique sender IDs
-      const uniqueSenderIds = [...new Set(messages.map(message => message.senderId._id))];
+      const uniqueSenderIds = Array.from(new Set(messages.map(message => message.senderId._id)));
       
       // For each sender, fetch their profile if not current user
       for (const senderId of uniqueSenderIds) {
@@ -1120,13 +1122,6 @@ export default function ConversationPage({
                     >
                       Chat Info
                     </button>
-                    <button
-                      onClick={() => setShowReportModal(true)}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                      role="menuitem"
-                    >
-                      Report
-                    </button>
                   </div>
                 </div>
               )}
@@ -1246,15 +1241,6 @@ export default function ConversationPage({
                   </div>
                   <div className={`text-xs text-gray-500 dark:text-gray-400 mt-0.5 ${isCurrentUser ? 'text-right' : 'text-left'}`} style={{width: 'auto', fontSize: '0.75rem'}}>
                     {formatDate(message.createdAt)}
-                    {isCurrentUser && (
-                      <span className="ml-1">
-                        {message.read ? (
-                          <span className="text-blue-500 dark:text-blue-400">Read</span>
-                        ) : (
-                          'Sent'
-                        )}
-                      </span>
-                    )}
                   </div>
                 </div>
                 {isCurrentUser && (
