@@ -8,7 +8,7 @@ import {
 
 export async function GET(
   req: Request,
-  { params }: { params: { conversationId: string } }
+  { params }: { params: Promise<{ conversationId: string }> }
 ) {
   try {
     const session = await getServerSession();
@@ -16,15 +16,14 @@ export async function GET(
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    if (!params.conversationId) {
+    const { conversationId } = await params;
+    if (!conversationId) {
       return NextResponse.json({ error: 'Conversation ID is required' }, { status: 400 });
     }
-
     const userEmail = session.user.email;
     
     // Get conversation by ID
-    const conversation = await getConversation(params.conversationId);
+    const conversation = await getConversation(conversationId);
     
     if (!conversation) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
@@ -56,7 +55,7 @@ export async function GET(
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { conversationId: string } }
+  { params }: { params: Promise<{ conversationId: string }> }
 ) {
   try {
     const session = await getServerSession();
@@ -64,15 +63,14 @@ export async function PATCH(
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    if (!params.conversationId) {
+    const { conversationId } = await params;
+    if (!conversationId) {
       return NextResponse.json({ error: 'Conversation ID is required' }, { status: 400 });
     }
-
     const userEmail = session.user.email;
     
     // Get conversation to check permissions
-    const conversation = await getConversation(params.conversationId);
+    const conversation = await getConversation(conversationId);
     
     if (!conversation) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
@@ -91,7 +89,7 @@ export async function PATCH(
     const updateData = await req.json();
     
     // Update conversation
-    const updatedConversation = await updateConversation(params.conversationId, updateData);
+    const updatedConversation = await updateConversation(conversationId, updateData);
 
     return NextResponse.json({ success: true, data: updatedConversation });
   } catch (error) {
@@ -102,7 +100,7 @@ export async function PATCH(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { conversationId: string } }
+  { params }: { params: Promise<{ conversationId: string }> }
 ) {
   try {
     const session = await getServerSession();
@@ -110,15 +108,14 @@ export async function DELETE(
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    if (!params.conversationId) {
+    const { conversationId } = await params;
+    if (!conversationId) {
       return NextResponse.json({ error: 'Conversation ID is required' }, { status: 400 });
     }
-
     const userEmail = session.user.email;
     
     // Get conversation to check permissions
-    const conversation = await getConversation(params.conversationId);
+    const conversation = await getConversation(conversationId);
     
     if (!conversation) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
@@ -134,7 +131,7 @@ export async function DELETE(
     }
     
     // Delete conversation
-    await deleteConversation(params.conversationId);
+    await deleteConversation(conversationId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

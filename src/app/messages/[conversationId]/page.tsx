@@ -33,6 +33,7 @@ import {
   deleteConversation as deleteFirebaseConversation,
   enrichParticipantsWithUserData
 } from '@/lib/firebaseService';
+import { use } from 'react';
 
 interface Participant {
   _id: string;
@@ -84,8 +85,9 @@ const UserAvatar = ({ size = 32, letter = null }: { size?: number, letter?: stri
 export default function ConversationPage({
   params,
 }: {
-  params: { conversationId: string };
+  params: Promise<{ conversationId: string }>;
 }) {
+  const { conversationId } = use(params);
   const { data: session } = useSession();
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -116,7 +118,7 @@ export default function ConversationPage({
   const fetchConversation = async () => {
     try {
       // Get conversation from Firebase
-      const result = await getConversation(params.conversationId);
+      const result = await getConversation(conversationId);
       
       if (result) {
         // Transform Firebase data to match expected format
@@ -182,7 +184,7 @@ export default function ConversationPage({
   const fetchMessages = async () => {
     try {
       // Get messages from Firebase
-      const result = await getMessagesByConversation(params.conversationId);
+      const result = await getMessagesByConversation(conversationId);
       
       if (result && result.length > 0) {
         // Transform Firebase data to match expected format
@@ -230,10 +232,10 @@ export default function ConversationPage({
   const messagesQuery = useCallback(() => {
     return query(
       messagesCollection,
-      where('conversationId', '==', params.conversationId),
+      where('conversationId', '==', conversationId),
       orderBy('createdAt', 'asc')
     );
-  }, [params.conversationId]);
+  }, [conversationId]);
 
   // Store the query result to avoid recreation on every render
   const queryRef = useRef(messagesQuery());
@@ -250,7 +252,7 @@ export default function ConversationPage({
   const { data: realtimeMessages } = useFirebaseRealtime<FirebaseMessage[]>({
     subscriptionType: 'query',
     target: queryRef.current,
-    enabled: !!session?.user && !!params.conversationId,
+    enabled: !!session?.user && !!conversationId,
     onData: (data) => {
       if (!data || data.length === 0) return;
       
@@ -458,7 +460,7 @@ export default function ConversationPage({
     try {
       await markFirebaseMessageAsRead(messageId, session.user.email);
       // Update unread count in notification context
-      decrementUnreadCount(params.conversationId);
+      decrementUnreadCount(conversationId);
     } catch (error) {
       console.error('Error marking message as read:', error);
     }
@@ -544,7 +546,7 @@ export default function ConversationPage({
       // Create a new message in Firebase with complete data
       const messageData = {
         content: messageContent,
-        conversationId: params.conversationId,
+        conversationId: conversationId,
         senderId: senderData,
         readBy: [session.user.email] // Mark as read by sender
       };
@@ -641,7 +643,7 @@ export default function ConversationPage({
     
     // Cleanup is handled by the hook
     return () => {};
-  }, [session, params.conversationId, router]);
+  }, [session, conversationId, router]);
 
   // Effect to auto-scroll when messages change
   useEffect(() => {
