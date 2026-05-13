@@ -6,16 +6,7 @@ Compatibility considers overlapping cities, budget overlap, at least 75% timelin
 
 ## Stack
 
-Next.js + TypeScript, Firebase for auth and Firestore, Tailwind for styles. `bad-words` for content filtering, `date-fns` for date math.
-
-## Setup
-
-```bash
-npm install
-npm run dev
-```
-
-You'll need a Firebase project with Auth and Firestore enabled. Security rules are in `firestore.rules`.
+Next.js + TypeScript, Firebase for auth and Firestore, Tailwind for styles. `bad-words` for content filtering, `date-fns` for date math. Security rules are in `firestore.rules`.
 
 ## Privacy
 
